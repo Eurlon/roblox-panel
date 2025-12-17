@@ -127,17 +127,10 @@ function performKick() {
 }
 
 function sendTroll(id, cmd, assetId = null) {
-    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: id, cmd: cmd, assetId: assetId})});
+    const body = {userid: id, cmd: cmd};
+    if(assetId) body["assetId"] = assetId;
+    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
     toast(`${cmd.toUpperCase()} sent`, "danger");
-}
-
-function playSoundPrompt(id) {
-    const assetId = prompt("Enter the Roblox asset ID:");
-    if (assetId) sendTroll(id, "playsound", assetId);
-}
-
-function stopSound(id) {
-    sendTroll(id, "stopsound");
 }
 
 function render(data) {
@@ -148,6 +141,7 @@ function render(data) {
     Object.entries(data.players).forEach(([id, p]) => {
         let card = document.getElementById(`card_${id}`);
         if (!card) { card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card); }
+
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
@@ -163,8 +157,7 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ffaa00,#ff8800);" onclick="playSoundPrompt('${id}')">PLAY SOUND</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff4444,#aa0000);" onclick="stopSound('${id}')">STOP SOUND</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','playsound', prompt('Enter Asset ID'))">PLAY SOUND</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -172,6 +165,7 @@ function render(data) {
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
             </div>
         `;
     });
@@ -214,7 +208,6 @@ def api():
                     "gameId": d.get("gameId", 0),
                     "jobId": d.get("jobId", "Unknown")
                 }
-                socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
             elif d.get("action") == "heartbeat" and uid in connected_players:
                 connected_players[uid]["last"] = now
         except: pass
@@ -228,7 +221,11 @@ def api():
             return jsonify({"command": "kick", "reason": reason})
         if uid in pending_commands:
             cmd = pending_commands.pop(uid)
-            return jsonify({"command": cmd})
+            assetId = None
+            if isinstance(cmd, dict):
+                assetId = cmd.get("assetId")
+                cmd = cmd.get("cmd")
+            return jsonify({"command": cmd, "assetId": assetId})
         return jsonify({})
 
 @app.route("/kick", methods=["POST"])
@@ -250,8 +247,10 @@ def troll():
     cmd = data.get("cmd", "")
     assetId = data.get("assetId", None)
     if uid and cmd:
-        pending_commands[uid] = {"command": cmd}
-        if assetId: pending_commands[uid]["assetId"] = assetId
+        if assetId:
+            pending_commands[uid] = {"cmd": cmd, "assetId": assetId}
+        else:
+            pending_commands[uid] = cmd
         name = connected_players.get(uid, {}).get("username", "Unknown")
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
