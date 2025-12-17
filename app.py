@@ -15,8 +15,7 @@ ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 
 connected_players = {}
 pending_commands = {}
-# Cette liste reste en mémoire tant que le script tourne
-history_logs = []
+history_logs = [] # Persistant tant que le script tourne
 
 def add_to_history(action, username, details=""):
     log = {
@@ -46,7 +45,7 @@ HTML = """<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>ROBLOX CONTROL PANEL PRO</title>
+<title>ROBLOX CONTROL PANEL ULTIMATE</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -68,16 +67,15 @@ h1{font-family:Orbitron;font-size:3rem;text-align:center;color:#00ffaa;text-shad
 .info b{color:#eee}
 .info a{color:#00ffaa;text-decoration:none}
 .category{font-weight:bold;color:#00ffaa;margin:15px 0 10px;font-size:1rem;text-transform:uppercase}
-button.kick-btn{padding:10px;border:none;border-radius:10px;cursor:pointer;font-weight:bold;font-size:0.85rem;color:white;margin-bottom:5px}
+button.kick-btn{padding:10px;border:none;border-radius:10px;cursor:pointer;font-weight:bold;font-size:0.8rem;color:white;margin-bottom:5px;transition:0.2s}
 button.kick-btn:hover{filter:brightness(1.2);transform:scale(1.02)}
 .history-panel{background:rgba(10,10,10,0.9);border:1px solid #222;border-radius:18px;padding:20px;height:750px;display:flex;flex-direction:column}
 .history-list{flex-grow:1;overflow-y:auto;font-size:0.85rem}
 .history-item{padding:10px;border-bottom:1px solid #222;display:flex;justify-content:space-between;align-items:center}
 .hist-time{color:#555;margin-right:10px}
-.del-hist{color:#444;cursor:pointer}
 .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:1000}
 .modal.active{display:flex}
-.modal-content{background:#111;padding:30px;border-radius:20px;width:90%;max-width:450px}
+.modal-content{background:#111;padding:30px;border-radius:20px;width:90%;max-width:450px;border:1px solid #333}
 .modal-content input{width:100%;padding:15px;border-radius:12px;border:none;background:#222;color:white;margin-bottom:20px}
 </style>
 </head>
@@ -86,13 +84,13 @@ button.kick-btn:hover{filter:brightness(1.2);transform:scale(1.02)}
     <h1>ROBLOX CONTROL PANEL</h1>
     <div class="main-layout">
         <div>
-            <h2 class="category" style="margin-top:0">Joueurs Connectés</h2>
+            <h2 class="category" style="margin-top:0">Manage Players</h2>
             <div class="grid" id="players"></div>
         </div>
         <div>
             <div style="display:flex;justify-content:space-between;align-items:center">
-                <h2 class="category" style="margin-top:0">Historique d'activité</h2>
-                <button onclick="clearHistory()" style="background:none;border:none;color:#555;cursor:pointer">EFFACER TOUT</button>
+                <h2 class="category" style="margin-top:0">History</h2>
+                <button onclick="clearHistory()" style="background:none;border:none;color:#555;cursor:pointer;font-weight:bold">CLEAR ALL</button>
             </div>
             <div class="history-panel"><div class="history-list" id="history-list"></div></div>
         </div>
@@ -100,20 +98,20 @@ button.kick-btn:hover{filter:brightness(1.2);transform:scale(1.02)}
 </div>
 
 <div class="modal" id="kickModal"><div class="modal-content">
-    <h2 style="color:#ff3366">Expulser</h2><br>
-    <input type="text" id="kickReason" placeholder="Raison..."><br>
+    <h2 style="color:#ff3366">Kick Player</h2><br>
+    <input type="text" id="kickReason" placeholder="Reason..."><br>
     <div style="display:flex;gap:10px">
-        <button style="flex:1;padding:10px" onclick="closeModal('kickModal')">Annuler</button>
-        <button style="flex:1;background:#ff3366;color:white;border:none;border-radius:10px" id="confirmKickBtn">Confirmer</button>
+        <button style="flex:1;padding:12px;border-radius:10px;cursor:pointer" onclick="closeModal('kickModal')">Cancel</button>
+        <button style="flex:1;background:#ff3366;color:white;border:none;border-radius:10px;cursor:pointer;font-weight:bold" id="confirmKickBtn">Confirm Kick</button>
     </div>
 </div></div>
 
 <div class="modal" id="soundModal"><div class="modal-content">
-    <h2 style="color:orange">Jouer un Son</h2><br>
-    <input type="text" id="soundAssetId" placeholder="ID de l'Asset"><br>
+    <h2 style="color:orange">Play Sound</h2><br>
+    <input type="text" id="soundAssetId" placeholder="Asset ID"><br>
     <div style="display:flex;gap:10px">
-        <button style="flex:1;padding:10px" onclick="closeModal('soundModal')">Annuler</button>
-        <button style="flex:1;background:orange;color:white;border:none;border-radius:10px" id="confirmSoundBtn">Lancer le son</button>
+        <button style="flex:1;padding:12px;border-radius:10px" onclick="closeModal('soundModal')">Cancel</button>
+        <button style="flex:1;background:orange;color:white;border:none;border-radius:10px;font-weight:bold" id="confirmSoundBtn">Play</button>
     </div>
 </div></div>
 
@@ -121,19 +119,20 @@ button.kick-btn:hover{filter:brightness(1.2);transform:scale(1.02)}
 const socket = io();
 let selectedUid = null;
 
-socket.on('connect', () => { console.log("Connecté au serveur"); });
+socket.on('connect', () => { console.log("Re-synchronisation..."); });
 
 function openKickModal(uid) { selectedUid = uid; document.getElementById('kickModal').classList.add('active'); }
 function openSoundModal(uid) { selectedUid = uid; document.getElementById('soundModal').classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); selectedUid = null; }
 
 function deletePlayer(uid) { fetch("/delete_player", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: uid})}); }
+
 function sendTroll(uid, cmd, assetId = null) {
     fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: uid, cmd: cmd, assetId: assetId})});
 }
 
 document.getElementById('confirmKickBtn').onclick = () => {
-    sendTroll(selectedUid, 'kick', document.getElementById('kickReason').value || "Expulsé par admin");
+    sendTroll(selectedUid, 'kick', document.getElementById('kickReason').value || "Kicked by admin");
     closeModal('kickModal');
 };
 document.getElementById('confirmSoundBtn').onclick = () => {
@@ -154,24 +153,30 @@ socket.on("update", (data) => {
         }
         card.innerHTML = `
             <button class="trash-player" onclick="deletePlayer('${id}')">🗑️</button>
-            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "En ligne" : "Hors-ligne"}</span></div>
+            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/fr/users/${id}/profile" target="_blank">${p.username}</a></div>
             <div class="info">
                 <b>IP :</b> ${p.ip}<br>
-                <b>Jeu :</b> <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName}</a><br>
-                <b>Exécuteur :</b> ${p.executor}
+                <b>Game :</b> <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName || 'View Game'}</a><br>
+                <b>Executor :</b> ${p.executor}
             </div>
             <div class="category">Trolls</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588)" onclick="openKickModal('${id}')">KICK</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa)" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa)" onclick="sendTroll('${id}','spin')">SPIN</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ffcc00,#ff9900);color:black" onclick="sendTroll('${id}','explode')">EXPLODE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffff00,#ff9900);color:black" onclick="sendTroll('${id}','jump')">JUMP</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);color:black" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000)" onclick="sendTroll('${id}','explode')">EXPLODE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa)" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="kick-btn" style="background:orange" onclick="openSoundModal('${id}')">PLAY SOUND</button>
             </div>
             <div class="category">Undo</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:#444" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
+                <button class="kick-btn" style="background:#444" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
+                <button class="kick-btn" style="background:#444" onclick="sendTroll('${id}','unrainbow')">UNRAINBOW</button>
+                <button class="kick-btn" style="background:#444" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
                 <button class="kick-btn" style="background:#444" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
             </div>
         `;
@@ -199,7 +204,6 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
-    # Envoie l'historique complet dès qu'un utilisateur ouvre la page
     emit("update_history", history_logs)
 
 @app.route("/api", methods=["GET", "POST"])
@@ -214,7 +218,7 @@ def api():
             connected_players[uid] = {
                 "username": d.get("username", "Unknown"),
                 "ip": d.get("ip", "Unknown"),
-                "gameName": d.get("gameName", "Jeu Inconnu"),
+                "gameName": d.get("gameName", "Click to view"), # Sera mis à jour par le script
                 "gameId": d.get("gameId", "0"),
                 "executor": d.get("executor", "Unknown"),
                 "last": now, "online": True
@@ -248,7 +252,7 @@ def delete_player():
     if uid in connected_players:
         name = connected_players[uid]["username"]
         del connected_players[uid]
-        add_to_history("Supprimé du panel", name)
+        add_to_history("Supprimé", name)
     return jsonify({"ok": True})
 
 @app.route("/clear_history", methods=["POST"])
