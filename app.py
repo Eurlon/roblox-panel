@@ -85,7 +85,7 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
 </head>
 <body>
 <div class="container">
-    <h1>Oxydal RatL</h1>
+    <h1>Oxydal Rat</h1>
     <div class="stats" id="stats">Players online: <b>0</b></div>
     <div class="grid" id="players"></div>
 </div>
@@ -306,5 +306,6 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
 
 
