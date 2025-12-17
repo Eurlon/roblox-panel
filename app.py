@@ -10,7 +10,6 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
-
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
