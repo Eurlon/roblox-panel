@@ -46,7 +46,7 @@ HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ROBLOX CONTROL PANEL</title>
+<title>Oxydal Rat</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
@@ -85,7 +85,7 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
 </head>
 <body>
 <div class="container">
-    <h1>ROBLOX CONTROL PANEL</h1>
+    <h1>Oxydal RatL</h1>
     <div class="stats" id="stats">Players online: <b>0</b></div>
     <div class="grid" id="players"></div>
 </div>
@@ -306,4 +306,5 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
 
