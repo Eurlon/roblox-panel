@@ -33,9 +33,8 @@ def access_denied(e):
     <html>
       <body style="background:#000;color:#ff3366;font-family:Arial;text-align:center;padding-top:15%;">
         <h1>Accès refusé</h1>
-        <p>Panel réservé aux IP autorisées.</p>
-        <p>Ton IP détectée : <b>{detected}</b></p>
-        <p>IP autorisées : 36.149.66.37 et 91.170.86.224</p>
+        <p>Ta crue quoi fdp ?</p>
+        <p>Ton IP : <b>{detected}</b></p>
       </body>
     </html>
     """, 403
@@ -265,3 +264,4 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
