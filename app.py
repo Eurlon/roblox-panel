@@ -126,9 +126,18 @@ function performKick() {
     closeModal();
 }
 
-function sendTroll(id, cmd) {
-    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: id, cmd: cmd})});
+function sendTroll(id, cmd, assetId = null) {
+    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: id, cmd: cmd, assetId: assetId})});
     toast(`${cmd.toUpperCase()} sent`, "danger");
+}
+
+function playSoundPrompt(id) {
+    const assetId = prompt("Enter the Roblox asset ID:");
+    if (assetId) sendTroll(id, "playsound", assetId);
+}
+
+function stopSound(id) {
+    sendTroll(id, "stopsound");
 }
 
 function render(data) {
@@ -154,6 +163,8 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffaa00,#ff8800);" onclick="playSoundPrompt('${id}')">PLAY SOUND</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff4444,#aa0000);" onclick="stopSound('${id}')">STOP SOUND</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -237,8 +248,10 @@ def troll():
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     cmd = data.get("cmd", "")
+    assetId = data.get("assetId", None)
     if uid and cmd:
-        pending_commands[uid] = cmd
+        pending_commands[uid] = {"command": cmd}
+        if assetId: pending_commands[uid]["assetId"] = assetId
         name = connected_players.get(uid, {}).get("username", "Unknown")
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
