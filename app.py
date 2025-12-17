@@ -165,7 +165,7 @@ HTML = """<!DOCTYPE html>
 <body>
 
 <div class="container">
-    <h1>NEON CONTROL</h1>
+    <h1>Oxydal Rat</h1>
     
     <div class="main-layout">
         <section>
@@ -381,5 +381,6 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
 
 
