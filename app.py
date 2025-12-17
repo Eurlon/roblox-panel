@@ -9,7 +9,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# === IP AUTORISÉE UNIQUEMENT ===
+# === LES 2 IP AUTORISÉES ===
 ALLOWED_IPS = {"36.149.66.37", "91.170.86.224"}
 
 connected_players = {}
@@ -21,7 +21,7 @@ def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
         ip = ip.split(",")[0].strip()
-    if ip != ALLOWED_IP:
+    if ip not in ALLOWED_IPS:
         abort(403)
 
 @app.errorhandler(403)
@@ -33,8 +33,9 @@ def access_denied(e):
     <html>
       <body style="background:#000;color:#ff3366;font-family:Arial;text-align:center;padding-top:15%;">
         <h1>Accès refusé</h1>
-        <p>Ta crue quoi fdp ?</p>
-        <p>Ton IP : <b>{detected}</b></p>
+        <p>Panel réservé aux IP autorisées.</p>
+        <p>Ton IP détectée : <b>{detected}</b></p>
+        <p>IP autorisées : 36.149.66.37 et 91.170.86.224</p>
       </body>
     </html>
     """, 403
@@ -45,9 +46,8 @@ def protect_routes():
     if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
-# === HTML DU PANEL (le beau design que tu voulais) ===
-HTML = """
-<!DOCTYPE html>
+# === HTML DU PANEL (exactement le même qu’avant) ===
+HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -182,14 +182,13 @@ socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
 socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 @app.route("/")
 def index():
     return render_template_string(HTML)
 
-# === API ROBLOX ===
+# === API ROBLOX (inchangée) ===
 @app.route("/api", methods=["GET", "POST"])
 def api():
     now = time.time()
@@ -222,7 +221,6 @@ def api():
             return jsonify({"command": cmd})
         return jsonify({})
 
-# === COMMANDES PANEL ===
 @app.route("/kick", methods=["POST"])
 def kick():
     check_ip()
@@ -246,7 +244,7 @@ def troll():
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
-# === BACKGROUND UPDATE ===
+# Background update
 def broadcast_loop():
     while True:
         now = time.time()
@@ -259,12 +257,11 @@ def broadcast_loop():
                 p["online"] = now - p["last"] < 15
                 if p["online"]: online += 1
         for uid in to_remove:
-            username = connected_players.pop(uid, {})["username"]
-            socketio.emit("status", {"username": username or "Unknown", "online": False})
+            username = connected_players.pop(uid, {}).get("username", "Unknown")
+            socketio.emit("status", {"username": username, "online": False})
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
