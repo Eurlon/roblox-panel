@@ -100,6 +100,18 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
         </div>
     </div>
 </div>
+
+<div class="modal" id="playSoundModal">
+    <div class="modal-content" style="border-left:5px solid orange;">
+        <h2 style="color:orange;">Play Sound</h2>
+        <input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelSound">Cancel</button>
+            <button class="confirm-btn" id="confirmSound" style="background:linear-gradient(45deg,orange,#ff9900);">Confirm</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
@@ -126,12 +138,39 @@ function performKick() {
     closeModal();
 }
 
+const playSoundModal = document.getElementById("playSoundModal");
+let currentSoundId = null;
+
+function openPlaySoundModal(id) {
+    currentSoundId = id;
+    playSoundModal.classList.add("active");
+    document.getElementById("soundAssetId").focus();
+}
+
+function closeSoundModal() { playSoundModal.classList.remove("active"); }
+
+function performPlaySound() {
+    if (!currentSoundId) return;
+    const assetId = document.getElementById("soundAssetId").value.trim();
+    if(!assetId) return toast("Enter a valid Asset ID", "danger");
+    sendTroll(currentSoundId, "playsound", assetId);
+    closeSoundModal();
+}
+
 function sendTroll(id, cmd, assetId = null) {
     const body = {userid: id, cmd: cmd};
     if(assetId) body["assetId"] = assetId;
     fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
     toast(`${cmd.toUpperCase()} sent`, "danger");
 }
+
+document.getElementById("cancelKick").onclick = closeModal;
+document.getElementById("confirmKick").onclick = performKick;
+kickModal.onclick = (e) => { if (e.target === kickModal) closeModal(); };
+
+document.getElementById("cancelSound").onclick = closeSoundModal;
+document.getElementById("confirmSound").onclick = performPlaySound;
+playSoundModal.onclick = (e) => { if (e.target === playSoundModal) closeSoundModal(); };
 
 function render(data) {
     document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
@@ -157,7 +196,7 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','playsound', prompt('Enter Asset ID'))">PLAY SOUND</button>
+                <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -174,10 +213,6 @@ function render(data) {
         if (!currentIds.has(c.id.replace('card_', ''))) c.remove();
     });
 }
-
-document.getElementById("cancelKick").onclick = closeModal;
-document.getElementById("confirmKick").onclick = performKick;
-kickModal.onclick = (e) => { if (e.target === kickModal) closeModal(); };
 
 socket.on("update", render);
 socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
