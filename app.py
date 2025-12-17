@@ -10,7 +10,7 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # === LES 2 IP AUTORISÉES ===
-ALLOWED_IPS = {"36.149.66.37", "91.170.86.224"}
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 
 connected_players = {}
 pending_kicks = {}
@@ -264,4 +264,5 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
 
