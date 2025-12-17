@@ -10,7 +10,7 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # === IP AUTORISÉE UNIQUEMENT ===
-ALLOWED_IP = "36.149.66.37"
+ALLOWED_IPS = {"36.149.66.37", "91.170.86.224"}
 
 connected_players = {}
 pending_kicks = {}
@@ -33,8 +33,8 @@ def access_denied(e):
     <html>
       <body style="background:#000;color:#ff3366;font-family:Arial;text-align:center;padding-top:15%;">
         <h1>Accès refusé</h1>
-        <p>Ce panel est réservé à l'IP autorisée uniquement.</p>
-        <p>Ton IP détectée : <b>{detected}</b></p>
+        <p>Ta crue quoi fdp ?</p>
+        <p>Ton IP : <b>{detected}</b></p>
       </body>
     </html>
     """, 403
@@ -267,3 +267,4 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
