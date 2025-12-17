@@ -102,7 +102,7 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
 </div>
 
 <div class="modal" id="playSoundModal">
-    <div class="modal-content" style="border-left:5px solid orange;">
+    <div class="modal-content" style="border-left:5px solid orange; box-shadow:0 0 40px rgba(255,165,0,0.7);">
         <h2 style="color:orange;">Play Sound</h2>
         <input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus>
         <div class="modal-buttons">
@@ -129,7 +129,6 @@ function toast(msg, type = "success") {
 
 function openKickModal(id) { currentKickId = id; kickModal.classList.add("active"); document.getElementById("kickReason").focus(); }
 function closeModal() { kickModal.classList.remove("active"); }
-
 function performKick() {
     if (!currentKickId) return;
     const reason = document.getElementById("kickReason").value.trim() || "Kicked by admin";
@@ -140,15 +139,12 @@ function performKick() {
 
 const playSoundModal = document.getElementById("playSoundModal");
 let currentSoundId = null;
-
 function openPlaySoundModal(id) {
     currentSoundId = id;
     playSoundModal.classList.add("active");
     document.getElementById("soundAssetId").focus();
 }
-
 function closeSoundModal() { playSoundModal.classList.remove("active"); }
-
 function performPlaySound() {
     if (!currentSoundId) return;
     const assetId = document.getElementById("soundAssetId").value.trim();
