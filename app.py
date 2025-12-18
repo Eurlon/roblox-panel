@@ -193,6 +193,17 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
     </div>
 </div>
 
+<div class="modal" id="sendMessageModal">
+    <div class="modal-content" style="border-left:5px solid #ffaa00; box-shadow:0 0 40px rgba(255,170,0,0.7);">
+        <h2 style="color:#ffaa00;">Send Chat Message</h2>
+        <input type="text" id="chatMessage" placeholder="Enter message to send" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelMessage">Cancel</button>
+            <button class="confirm-btn" id="confirmMessage" style="background:linear-gradient(45deg,#ffaa00,#ff8800);">Send</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal" id="luaExecModal">
     <div class="modal-content" style="border-left:5px solid #ff00ff; box-shadow:0 0 40px rgba(255,0,255,0.7);">
         <h2 style="color:#ff00ff;">Execute Lua Script</h2>
@@ -566,4 +577,3 @@ if __name__ == "__main__":
     load_history()
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
