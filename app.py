@@ -305,6 +305,7 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffffff,#cccccc);color:#000;" onclick="sendTroll('${id}','flashbang')">FLASHBANG</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
@@ -344,7 +345,6 @@ socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
 socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 
-// Load history on page load
 fetch("/get_history").then(r => r.json()).then(data => renderHistory(data));
 </script>
 </body>
