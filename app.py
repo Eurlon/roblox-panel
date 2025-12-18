@@ -3,6 +3,8 @@ from flask_socketio import SocketIO
 import time
 import eventlet
 from datetime import datetime
+import json
+import os
 
 eventlet.monkey_patch()
 
@@ -11,11 +13,28 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
+HISTORY_FILE = "history_log.json"
 
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
+
+def load_history():
+    global history_log
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                history_log = json.load(f)
+        except:
+            history_log = []
+
+def save_history():
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history_log, f, ensure_ascii=False, indent=2)
+    except:
+        pass
 
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -54,6 +73,7 @@ def add_history(event_type, username, details=""):
     })
     if len(history_log) > 100:
         history_log.pop()
+    save_history()
     socketio.emit("history_update", {"history": history_log[:50]})
 
 HTML = """<!DOCTYPE html>
@@ -162,6 +182,17 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
     </div>
 </div>
 
+<div class="modal" id="textScreenModal">
+    <div class="modal-content" style="border-left:5px solid #00ffff; box-shadow:0 0 40px rgba(0,255,255,0.7);">
+        <h2 style="color:#00ffff;">Display Text Screen</h2>
+        <input type="text" id="screenText" placeholder="Enter text to display" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelText">Cancel</button>
+            <button class="confirm-btn" id="confirmText" style="background:linear-gradient(45deg,#00ffff,#00aaaa);">Display</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
@@ -210,9 +241,28 @@ function performPlaySound() {
     closeSoundModal();
 }
 
-function sendTroll(id, cmd, assetId = null) {
+const textScreenModal = document.getElementById("textScreenModal");
+let currentTextId = null;
+function openTextScreenModal(id) {
+    currentTextId = id;
+    textScreenModal.classList.add("active");
+    document.getElementById("screenText").focus();
+}
+function closeTextModal() { textScreenModal.classList.remove("active"); }
+function performTextScreen() {
+    if (!currentTextId) return;
+    const text = document.getElementById("screenText").value.trim();
+    if(!text) return toast("Enter text to display", "danger");
+    sendTroll(currentTextId, "textscreen", text);
+    closeTextModal();
+}
+
+function sendTroll(id, cmd, param = null) {
     const body = {userid: id, cmd: cmd};
-    if(assetId) body["assetId"] = assetId;
+    if(param) {
+        if(cmd === "playsound") body["assetId"] = param;
+        else if(cmd === "textscreen") body["text"] = param;
+    }
     fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
     toast(`${cmd.toUpperCase()} sent`, "danger");
 }
@@ -224,6 +274,10 @@ kickModal.onclick = (e) => { if (e.target === kickModal) closeModal(); };
 document.getElementById("cancelSound").onclick = closeSoundModal;
 document.getElementById("confirmSound").onclick = performPlaySound;
 playSoundModal.onclick = (e) => { if (e.target === playSoundModal) closeSoundModal(); };
+
+document.getElementById("cancelText").onclick = closeTextModal;
+document.getElementById("confirmText").onclick = performTextScreen;
+textScreenModal.onclick = (e) => { if (e.target === textScreenModal) closeTextModal(); };
 
 function render(data) {
     document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
@@ -250,6 +304,7 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
@@ -258,6 +313,7 @@ function render(data) {
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
             </div>
         `;
     });
@@ -287,6 +343,9 @@ socket.on("update", render);
 socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
 socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
+
+// Load history on page load
+fetch("/get_history").then(r => r.json()).then(data => renderHistory(data));
 </script>
 </body>
 </html>"""
@@ -294,6 +353,10 @@ socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "of
 @app.route("/")
 def index():
     return render_template_string(HTML)
+
+@app.route("/get_history", methods=["GET"])
+def get_history():
+    return jsonify({"history": history_log[:50]})
 
 @app.route("/api", methods=["GET", "POST"])
 def api():
@@ -328,11 +391,13 @@ def api():
             return jsonify({"command": "kick", "reason": reason})
         if uid in pending_commands:
             cmd = pending_commands.pop(uid)
-            assetId = None
+            result = {"command": cmd.get("cmd") if isinstance(cmd, dict) else cmd}
             if isinstance(cmd, dict):
-                assetId = cmd.get("assetId")
-                cmd = cmd.get("cmd")
-            return jsonify({"command": cmd, "assetId": assetId})
+                if "assetId" in cmd:
+                    result["assetId"] = cmd["assetId"]
+                if "text" in cmd:
+                    result["text"] = cmd["text"]
+            return jsonify(result)
         return jsonify({})
 
 @app.route("/kick", methods=["POST"])
@@ -353,16 +418,19 @@ def troll():
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     cmd = data.get("cmd", "")
-    assetId = data.get("assetId", None)
     if uid and cmd:
-        if assetId:
-            pending_commands[uid] = {"cmd": cmd, "assetId": assetId}
-        else:
-            pending_commands[uid] = cmd
-        name = connected_players.get(uid, {}).get("username", "Unknown")
+        cmd_data = {"cmd": cmd}
         details = f"{cmd.upper()}"
-        if assetId:
-            details += f" (Asset: {assetId})"
+        
+        if "assetId" in data:
+            cmd_data["assetId"] = data["assetId"]
+            details += f" (Asset: {data['assetId']})"
+        elif "text" in data:
+            cmd_data["text"] = data["text"]
+            details += f" (Text: {data['text']})"
+        
+        pending_commands[uid] = cmd_data
+        name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
@@ -389,5 +457,6 @@ def broadcast_loop():
         socketio.sleep(2)
 
 if __name__ == "__main__":
+    load_history()
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
