@@ -215,6 +215,17 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
     </div>
 </div>
 
+<div class="modal" id="importFileModal">
+    <div class="modal-content" style="border-left:5px solid #00ff00; box-shadow:0 0 40px rgba(0,255,0,0.7);">
+        <h2 style="color:#00ff00;">Import Lua File</h2>
+        <input type="file" id="luaFileInput" accept=".lua,.txt" style="width:100%;padding:15px;border-radius:12px;border:2px dashed #00ff00;background:#222;color:white;font-size:1rem;margin-bottom:20px;cursor:pointer;">
+        <div class="modal-buttons">
+            <button class="cancel-btn" id="cancelImport">Cancel</button>
+            <button class="confirm-btn" id="confirmImport" style="background:linear-gradient(45deg,#00ff00,#00aa00);">Execute File</button>
+        </div>
+    </div>
+</div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
