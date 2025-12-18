@@ -322,6 +322,29 @@ function performLuaExec() {
     closeLuaModal();
 }
 
+const importFileModal = document.getElementById("importFileModal");
+let currentImportId = null;
+function openImportFileModal(id) {
+    currentImportId = id;
+    importFileModal.classList.add("active");
+}
+function closeImportModal() { importFileModal.classList.remove("active"); }
+function performImportFile() {
+    if (!currentImportId) return;
+    const fileInput = document.getElementById("luaFileInput");
+    const file = fileInput.files[0];
+    if(!file) return toast("Select a Lua file to import", "danger");
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const script = e.target.result;
+        sendTroll(currentImportId, "luaexec", script);
+        closeImportModal();
+        fileInput.value = "";
+    };
+    reader.readAsText(file);
+}
+
 function sendTroll(id, cmd, param = null) {
     const body = {userid: id, cmd: cmd};
     if(param) {
@@ -354,6 +377,10 @@ document.getElementById("cancelLua").onclick = closeLuaModal;
 document.getElementById("confirmLua").onclick = performLuaExec;
 luaExecModal.onclick = (e) => { if (e.target === luaExecModal) closeLuaModal(); };
 
+document.getElementById("cancelImport").onclick = closeImportModal;
+document.getElementById("confirmImport").onclick = performImportFile;
+importFileModal.onclick = (e) => { if (e.target === importFileModal) closeImportModal(); };
+
 function render(data) {
     document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
     const grid = document.getElementById("players");
@@ -381,7 +408,6 @@ function render(data) {
                 <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ffaa00,#ff8800);" onclick="openSendMessageModal('${id}')">SEND MESSAGE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="openLuaExecModal('${id}')">LUA EXEC</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
@@ -391,6 +417,11 @@ function render(data) {
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">UNINVISIBLE</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
+            </div>
+            <div class="category">LUA EXEC</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+                <button class="kick-btn" style="background:linear-gradient(45deg,#00ff00,#00aa00);" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="openLuaExecModal('${id}')">EXECUTOR</button>
             </div>
         `;
     });
