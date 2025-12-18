@@ -60,7 +60,7 @@ h1{font-family:Orbitron;font-size:3.5rem;text-align:center;color:#00ffaa;text-sh
 .grid-wrapper::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
 .grid-wrapper::-webkit-scrollbar-thumb{background:linear-gradient(45deg,#00ffaa,#00aa88);border-radius:10px}
 .grid-wrapper::-webkit-scrollbar-thumb:hover{background:linear-gradient(45deg,#00ffcc,#00ccaa)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:25px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
 .card{background:rgba(20,20,20,.9);border-radius:18px;padding:25px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
 .card:hover{transform:translateY(-8px)}
 .status{display:flex;align-items:center;gap:10px;margin-bottom:15px}
