@@ -51,10 +51,15 @@ HTML = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;min-height:100vh}
+body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;min-height:100vh;overflow-y:scroll}
 .container{max-width:1200px;margin:auto;padding:40px}
 h1{font-family:Orbitron;font-size:3.5rem;text-align:center;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:20px}
 .stats{text-align:center;margin:30px 0;font-size:1.8rem}
+.grid-wrapper{max-height:calc(100vh - 250px);overflow-y:auto;padding-right:10px}
+.grid-wrapper::-webkit-scrollbar{width:12px}
+.grid-wrapper::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
+.grid-wrapper::-webkit-scrollbar-thumb{background:linear-gradient(45deg,#00ffaa,#00aa88);border-radius:10px}
+.grid-wrapper::-webkit-scrollbar-thumb:hover{background:linear-gradient(45deg,#00ffcc,#00ccaa)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:25px}
 .card{background:rgba(20,20,20,.9);border-radius:18px;padding:25px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
 .card:hover{transform:translateY(-8px)}
@@ -87,7 +92,9 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
 <div class="container">
     <h1>Oxydal Rat</h1>
     <div class="stats" id="stats">Players online: <b>0</b></div>
-    <div class="grid" id="players"></div>
+    <div class="grid-wrapper">
+        <div class="grid" id="players"></div>
+    </div>
 </div>
 
 <div class="modal" id="kickModal">
@@ -306,6 +313,3 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
-
-
