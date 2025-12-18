@@ -95,7 +95,7 @@ body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f20
 h1{font-family:Orbitron;font-size:3rem;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:15px}
 .stats{font-size:1.5rem;margin-top:10px}
 .content-area{flex:1;overflow:hidden;position:relative}
-.tab-content{display:none;height:100%;overflow-y:auto;overflow-x:hidden;padding:30px 40px}
+.tab-content{display:none;height:100%;overflow-y:auto;padding:30px 40px}
 .tab-content.active{display:block}
 .tab-content::-webkit-scrollbar{width:12px}
 .tab-content::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
@@ -189,17 +189,6 @@ button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform
         <div class="modal-buttons">
             <button class="cancel-btn" id="cancelText">Cancel</button>
             <button class="confirm-btn" id="confirmText" style="background:linear-gradient(45deg,#00ffff,#00aaaa);">Display</button>
-        </div>
-    </div>
-</div>
-
-<div class="modal" id="sendMessageModal">
-    <div class="modal-content" style="border-left:5px solid #ffaa00; box-shadow:0 0 40px rgba(255,170,0,0.7);">
-        <h2 style="color:#ffaa00;">Send Chat Message</h2>
-        <input type="text" id="chatMessage" placeholder="Enter message to send" autofocus>
-        <div class="modal-buttons">
-            <button class="cancel-btn" id="cancelMessage">Cancel</button>
-            <button class="confirm-btn" id="confirmMessage" style="background:linear-gradient(45deg,#ffaa00,#ff8800);">Send</button>
         </div>
     </div>
 </div>
@@ -317,22 +306,6 @@ function performSendMessage() {
     closeMessageModal();
 }
 
-const sendMessageModal = document.getElementById("sendMessageModal");
-let currentMessageId = null;
-function openSendMessageModal(id) {
-    currentMessageId = id;
-    sendMessageModal.classList.add("active");
-    document.getElementById("chatMessage").focus();
-}
-function closeMessageModal() { sendMessageModal.classList.remove("active"); }
-function performSendMessage() {
-    if (!currentMessageId) return;
-    const message = document.getElementById("chatMessage").value.trim();
-    if(!message) return toast("Enter a message to send", "danger");
-    sendTroll(currentMessageId, "sendmessage", message);
-    closeMessageModal();
-}
-
 const luaExecModal = document.getElementById("luaExecModal");
 let currentLuaId = null;
 function openLuaExecModal(id) {
@@ -400,10 +373,6 @@ document.getElementById("cancelMessage").onclick = closeMessageModal;
 document.getElementById("confirmMessage").onclick = performSendMessage;
 sendMessageModal.onclick = (e) => { if (e.target === sendMessageModal) closeMessageModal(); };
 
-document.getElementById("cancelMessage").onclick = closeMessageModal;
-document.getElementById("confirmMessage").onclick = performSendMessage;
-sendMessageModal.onclick = (e) => { if (e.target === sendMessageModal) closeMessageModal(); };
-
 document.getElementById("cancelLua").onclick = closeLuaModal;
 document.getElementById("confirmLua").onclick = performLuaExec;
 luaExecModal.onclick = (e) => { if (e.target === luaExecModal) closeLuaModal(); };
@@ -438,6 +407,7 @@ function render(data) {
                 <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
+                <button class="kick-btn" style="background:linear-gradient(45deg,#ffaa00,#ff8800);" onclick="openSendMessageModal('${id}')">SEND MESSAGE</button>
             </div>
             <div class="category">UNDO</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
