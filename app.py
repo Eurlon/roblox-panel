@@ -88,7 +88,6 @@ HTML = """<!DOCTYPE html>
         --primary-hover: #0891b2;
         --text: #e2e8f0;
         --text-muted: #94a3b8;
-        --danger: #ef4444;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
@@ -100,12 +99,12 @@ HTML = """<!DOCTYPE html>
     .main { flex:1;margin-top:70px;display:flex; }
     .sidebar { width:260px;background:rgba(30,41,59,0.95);border-right:1px solid var(--border);padding:1.5rem 0; }
     .nav-item { padding:1rem 2rem;cursor:pointer;transition:all 0.3s;color:var(--text-muted);font-weight:500; }
-    .nav-item:hover { background:rgba(6,182,212,0.1);color:var(--primary); }
-    .nav-item.active { background:rgba(6,182,212,0.2);color:var(--primary);border-left:4px solid var(--primary); }
+    .nav-item:hover { background:rgba(6,182,212,0.15);color:var(--primary); }
+    .nav-item.active { background:rgba(6,182,212,0.25);color:var(--primary);border-left:4px solid var(--primary); }
     .content { flex:1;padding:2rem;overflow-y:auto; }
     .grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1.5rem; }
     .card { background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;transition:all 0.4s;position:relative;overflow:hidden; }
-    .card:hover { transform:translateY(-8px);box-shadow:0 20px 40px rgba(6,182,212,0.2);border-color:var(--primary); }
+    .card:hover { transform:translateY(-10px);box-shadow:0 25px 50px rgba(6,182,212,0.25);border-color:var(--primary); }
     .card::before { content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--primary),transparent);opacity:0;transition:0.4s; }
     .card:hover::before { opacity:1; }
     .status { display:flex;align-items:center;gap:8px;margin-bottom:12px; }
@@ -118,17 +117,30 @@ HTML = """<!DOCTYPE html>
     .info { font-size:0.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px; }
     .category { font-weight:bold;color:var(--primary);margin:16px 0 8px;font-size:0.95rem; }
     .btn-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:8px; }
-    .btn { padding:10px;border:none;border-radius:10px;font-weight:600;font-size:0.8rem;cursor:pointer;transition:all 0.3s;color:white; }
-    .btn:hover { transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,0.4); }
-    .modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;align-items:center;justify-content:center; }
+    .btn { 
+        padding:10px;border:none;border-radius:10px;font-weight:600;font-size:0.8rem;
+        cursor:pointer;transition:all 0.3s;color:white;
+        background: linear-gradient(135deg, #06b6d4, #0891b2);
+        box-shadow: 0 4px 15px rgba(6,182,212,0.3);
+    }
+    .btn:hover { 
+        transform:translateY(-4px); 
+        box-shadow:0 10px 25px rgba(6,182,212,0.5);
+        background: linear-gradient(135deg, #0891b2, #06b6d4);
+    }
+    .btn.kick { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow:0 4px 15px rgba(239,68,68,0.4); }
+    .btn.kick:hover { background: linear-gradient(135deg, #dc2626, #ef4444); box-shadow:0 10px 25px rgba(239,68,68,0.6); }
+    .btn.undo { background: #475569; }
+    .btn.undo:hover { background: #5b6b7d; }
+    .modal { display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:2000;align-items:center;justify-content:center; }
     .modal.active { display:flex; }
-    .modal-content { background:var(--card);border:1px solid var(--border);border-radius:16px;width:90%;max-width:520px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,0.4); }
+    .modal-content { background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:520px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,0.5); }
     .modal-content h2 { color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem; }
     input, textarea { width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace; }
     .modal-buttons { display:flex;gap:1rem; }
     .modal-btn { flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all 0.3s; }
     .confirm { background:var(--primary);color:white; }
-    .confirm:hover { background:var(--primary-hover);transform:translateY(-3px); }
+    .confirm:hover { background:var(--primary-hover);transform:translateY(-3px);box-shadow:0 10px 25px rgba(6,182,212,0.5); }
     .cancel { background:#475569;color:white; }
     .toast-container { position:fixed;bottom:20px;right:20px;z-index:9999; }
     .toast { background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,0.6);animation:slideIn 0.4s; }
@@ -162,7 +174,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Tous les modals (inchangés) -->
+<!-- Modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelKick">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelSound">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel" id="cancelText">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -185,13 +197,11 @@ function switchTab(tab) {
 function toast(msg, type = "info") {
     const t = document.createElement("div");
     t.className = "toast";
-    t.style.borderLeftColor = type === "danger" ? "#ef4444" : "#06b6d4";
     t.textContent = msg;
     document.getElementById("toasts").appendChild(t);
     setTimeout(() => t.remove(), 5000);
 }
 
-// Modals
 function openKickModal(id) { currentKickId = id; document.getElementById("kickModal").classList.add("active"); document.getElementById("kickReason").focus(); }
 function openPlaySoundModal(id) { currentSoundId = id; document.getElementById("playSoundModal").classList.add("active"); document.getElementById("soundAssetId").focus(); }
 function openTextScreenModal(id) { currentTextId = id; document.getElementById("textScreenModal").classList.add("active"); document.getElementById("screenText").focus(); }
@@ -212,7 +222,6 @@ function sendTroll(id, cmd, param = null) {
     toast(cmd.toUpperCase() + " sent");
 }
 
-// Confirmations
 document.getElementById("confirmKick").onclick = () => {
     const reason = document.getElementById("kickReason").value.trim() || "Kicked by admin";
     fetch("/kick", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentKickId, reason})});
@@ -265,31 +274,31 @@ function render(data) {
 
             <div class="category">TROLLS</div>
             <div class="btn-grid">
-                <button class="btn" style="background:linear-gradient(45deg,#ef4444,#dc2626)" onclick="openKickModal('${id}')">KICK</button>
-                <button class="btn" style="background:linear-gradient(45deg,#8b5cf6,#7c3aed)" onclick="sendTroll('${id}','freeze')">FREEZE</button>
-                <button class="btn" style="background:linear-gradient(45deg,#06b6d4,#0891b2)" onclick="sendTroll('${id}','spin')">SPIN</button>
-                <button class="btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00)" onclick="sendTroll('${id}','jump')">JUMP</button>
-                <button class="btn" style="background:linear-gradient(45deg,#88ff88,#55aa55)" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
-                <button class="btn" style="background:linear-gradient(45deg,#ff5555,#aa0000)" onclick="sendTroll('${id}','explode')">EXPLODE</button>
-                <button class="btn" style="background:linear-gradient(45deg,#5555ff,#0000aa)" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="btn" style="background:orange" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
-                <button class="btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa)" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
+                <button class="btn kick" onclick="openKickModal('${id}')">KICK</button>
+                <button class="btn" onclick="sendTroll('${id}','freeze')">FREEZE</button>
+                <button class="btn" onclick="sendTroll('${id}','spin')">SPIN</button>
+                <button class="btn" onclick="sendTroll('${id}','jump')">JUMP</button>
+                <button class="btn" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
+                <button class="btn" onclick="sendTroll('${id}','explode')">EXPLODE</button>
+                <button class="btn" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
+                <button class="btn" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
+                <button class="btn" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
             </div>
 
             <div class="category">UNDO</div>
             <div class="btn-grid">
-                <button class="btn" style="background:#666" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
-                <button class="btn" style="background:#666" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
-                <button class="btn" style="background:#666" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
-                <button class="btn" style="background:#666" onclick="sendTroll('${id}','uninvisible')">VISIBLE</button>
-                <button class="btn" style="background:#666" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
-                <button class="btn" style="background:#666" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
+                <button class="btn undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
+                <button class="btn undo" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
+                <button class="btn undo" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
+                <button class="btn undo" onclick="sendTroll('${id}','uninvisible')">VISIBLE</button>
+                <button class="btn undo" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
+                <button class="btn undo" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
             </div>
 
             <div class="category">LUA EXEC</div>
             <div class="btn-grid" style="grid-template-columns:1fr 1fr">
-                <button class="btn" style="background:linear-gradient(45deg,#00ff00,#00aa00)" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
-                <button class="btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa)" onclick="openLuaExecModal('${id}')">EXECUTOR</button>
+                <button class="btn" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
+                <button class="btn" onclick="openLuaExecModal('${id}')">EXECUTOR</button>
             </div>
         `;
     });
@@ -317,7 +326,7 @@ fetch("/get_history").then(r => r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# === Routes inchangées (identiques à ton code original) ===
+# === Routes identiques ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -416,7 +425,6 @@ def broadcast_loop():
         for uid in to_remove:
             username = connected_players.pop(uid, {}).get("username", "Unknown")
             add_history("disconnect", username, "Disconnected")
-            socketio.emit("status", {"username": username, "online": False})
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
