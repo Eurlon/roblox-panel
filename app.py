@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
+from flask import Flask, request, render_template_string, session, redirect, url_for
 from flask_socketio import SocketIO
 import time
 import eventlet
@@ -11,7 +11,7 @@ import requests
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_ULTRA_SECURE_2025_FINAL_XAI"
+app.config["SECRET_KEY"] = "WAVERAT_FINAL_PERFECT_2025_XAI"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
@@ -21,17 +21,18 @@ ADMIN_PASSWORD = "R4tW@v3!2k25#xAI"
 
 # ====================== CAPTCHA ROBLOX-STYLE ======================
 CAPTCHA_CHALLENGES = [
-    {"image": "https://i.imgur.com/0j2kX9P.png", "question": "Tourne la flèche vers le haut", "answer": 0},
-    {"image": "https://i.imgur.com/5e8f9cX.png", "question": "Dirige la voiture vers la droite", "answer": 90},
-    {"image": "https://i.imgur.com/8k9d2mQ.png", "question": "Tourne la clé vers la droite", "answer": 90},
-    {"image": "https://i.imgur.com/3f7g1hJ.png", "question": "Fais nager le poisson vers la gauche", "answer": 180},
-    {"image": "https://i.imgur.com/9p2k4mN.png", "question": "Fais voler l'oiseau vers le haut", "answer": 0},
+    {"image": "https://i.imgur.com/0j2kX9P.png", "question": "Turn the arrow upward", "answer": 0},
+    {"image": "https://i.imgur.com/5e8f9cX.png", "question": "Point the car to the right", "answer": 90},
+    {"image": "https://i.imgur.com/8k9d2mQ.png", "question": "Turn the key to the right", "answer": 90},
+    {"image": "https://i.imgur.com/3f7g1hJ.png", "question": "Make the fish swim to the left", "answer": 180},
+    {"image": "https://i.imgur.com/9p2k4mN.png", "question": "Make the bird fly upward", "answer": 0},
 ]
 
 def generate_captcha():
     challenge = random.choice(CAPTCHA_CHALLENGES)
     session["captcha_answer"] = challenge["answer"]
-    return challenge
+    session["captcha_image"] = challenge["image"]
+    session["captcha_question"] = challenge["question"]
 
 # ====================== ANTI PROXY / VPN ======================
 def is_proxy_or_vpn(ip):
@@ -92,12 +93,12 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN + CAPTCHA + REMEMBER ME ======================
+# ====================== PAGE LOGIN ======================
 LOGIN_HTML = """<!DOCTYPE html>
-<html lang="fr" class="dark">
+<html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<title>Wave Rat - Connexion</title>
+<title>Wave Rat - Login</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
     :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;--text-muted:#94a3b8;}
@@ -106,17 +107,20 @@ LOGIN_HTML = """<!DOCTYPE html>
     .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
     .logo{text-align:center;margin-bottom:2rem;}
     .logo svg{width:80px;height:80px;fill:var(--primary);}
-    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1rem;color:var(--primary);}
-    input{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
+    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1.5rem;color:var(--primary);}
+    input[type="text"], input[type="password"]{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
     .btn{width:100%;padding:14px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;transition:all .3s;margin-top:1rem;}
     .btn:hover{background:#0891b2;transform:translateY(-3px);}
     .error{color:#ef4444;text-align:center;margin-top:1rem;}
     .captcha{margin:20px 0;text-align:center;}
-    .captcha img{width:140px;height:140px;object-fit:contain;transition:transform .3s;border-radius:12px;background:#0f172a;padding:10px;}
+    .captcha p{font-size:1rem;margin-bottom:12px;color:var(--text);}
+    .captcha img{width:140px;height:140px;object-fit:contain;background:#1e293b;padding:15px;border-radius:16px;transition:transform .3s;}
     .rotate-btns{display:flex;gap:12px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
-    .rotate-btn{background:#334155;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:0.9rem;}
+    .rotate-btn{background:#334155;padding:10px 18px;border-radius:10px;cursor:pointer;font-size:0.9rem;}
     .rotate-btn:hover{background:#475569;}
-    .checkbox{display:flex;align-items:center;gap:10px;margin:15px 0;color:#94a3b8;font-size:0.95rem;}
+    .remember{display:flex;align-items:center;gap:10px;margin:15px 0;color:var(--text-muted);font-size:0.95rem;}
+    .remember input{width:18px;height:18px;cursor:pointer;}
+    .remember label{cursor:pointer;}
 </style>
 </head>
 <body>
@@ -130,7 +134,7 @@ LOGIN_HTML = """<!DOCTYPE html>
         <input type="password" name="password" placeholder="Password" required>
         
         <div class="captcha">
-            <p id="captcha-question">Tourne la flèche vers le haut</p>
+            <p id="question">Turn the arrow upward</p>
             <img id="captcha-img" src="https://i.imgur.com/0j2kX9P.png">
             <div class="rotate-btns">
                 <div class="rotate-btn" onclick="rotate(-90)">-90°</div>
@@ -140,13 +144,13 @@ LOGIN_HTML = """<!DOCTYPE html>
             </div>
         </div>
 
-        <div class="checkbox">
+        <div class="remember">
             <input type="checkbox" name="remember" id="remember">
-            <label for="remember">Rester connecté (30 jours)</label>
+            <label for="remember">Remember Me</label>
         </div>
 
         <input type="hidden" name="rotation" id="rotation" value="0">
-        <button type="submit" class="btn">Connexion sécurisée</button>
+        <button type="submit" class="btn">Login Securely</button>
         <div class="error" id="error"></div>
     </form>
 </div>
@@ -162,42 +166,51 @@ function rotate(deg) {
 </body>
 </html>"""
 
-# ====================== LOGIN + CAPTCHA + REMEMBER ME ======================
+# ====================== LOGIN ======================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("logged_in"):
         return redirect("/")
 
     if request.method == "GET":
-        challenge = generate_captcha()
+        generate_captcha()
         html = LOGIN_HTML
-        html = html.replace("Tourne la flèche vers le haut", challenge["question"])
-        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{challenge["image"]}"')
+        html = html.replace("Turn the arrow upward", session["captcha_question"])
+        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{session["captcha_image"]}"')
         return render_template_string(html)
 
     username = request.form.get("username", "")
     password = request.form.get("password", "")
     remember = request.form.get("remember") == "on"
-    submitted_rotation = int(request.form.get("rotation", -999)) % 360
+    submitted = int(request.form.get("rotation", -1)) % 360
 
-    if "captcha_answer" not in session or submitted_rotation != session["captcha_answer"]:
-        session.pop("captcha_answer", None)
-        return render_template_string(LOGIN_HTML + "<script>alert('Captcha incorrect !');</script>")
+    if "captcha_answer" not in session or submitted != session["captcha_answer"]:
+        generate_captcha()
+        html = LOGIN_HTML
+        html = html.replace("Turn the arrow upward", session["captcha_question"])
+        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{session["captcha_image"]}"')
+        return render_template_string(html + '<script>alert("Wrong captcha! New challenge loaded."); document.getElementById("rotation").value = 0; document.getElementById("captcha-img").style.transform = "rotate(0deg)"; rotation = 0;</script>')
 
     if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
         session["logged_in"] = True
         session.permanent = remember
         session.pop("captcha_answer", None)
+        session.pop("captcha_image", None)
+        session.pop("captcha_question", None)
         return redirect("/")
     else:
-        return render_template_string(LOGIN_HTML + "<script>alert('Mauvais identifiants');</script>")
+        generate_captcha()
+        html = LOGIN_HTML
+        html = html.replace("Turn the arrow upward", session["captcha_question"])
+        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{session["captcha_image"]}"')
+        return render_template_string(html + '<script>alert("Wrong credentials!"); document.getElementById("rotation").value = 0; document.getElementById("captcha-img").style.transform = "rotate(0deg)"; rotation = 0;</script>')
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/login")
 
-# ====================== DASHBOARD COMPLET (Logout en bas à gauche) ======================
+# ====================== DASHBOARD COMPLET ======================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -258,7 +271,7 @@ HTML = """<!DOCTYPE html>
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
     .logout-fixed{position:fixed;bottom:30px;left:30px;z-index:999;}
-    .logout-btn{padding:14px 24px;background:#ef4444;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:600;font-size:1rem;box-shadow:0 10px 30px rgba(239,68,68,.4);}
+    .logout-btn{padding:14px 28px;background:#ef4444;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:600;font-size:1rem;box-shadow:0 10px 30px rgba(239,68,68,.4);}
     .logout-btn:hover{background:#dc2626;transform:translateY(-4px);}
 </style>
 </head>
@@ -290,7 +303,6 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- TOUS LES MODALS -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -309,9 +321,8 @@ HTML = """<!DOCTYPE html>
 </div></div>
 <div class="toast-container" id="toasts"></div>
 
-<!-- BOUTON LOGOUT EN BAS À GAUCHE -->
 <div class="logout-fixed">
-    <button class="logout-btn" onclick="location.href='/logout'">Déconnexion</button>
+    <button class="logout-btn" onclick="location.href='/logout'">Logout</button>
 </div>
 
 <script>
@@ -527,7 +538,6 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# ====================== TOUTES LES ROUTES ======================
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -651,9 +661,9 @@ def broadcast_loop():
         socketio.sleep(2)
 
 if __name__ == "__main__":
-    print("Wave Rat Dashboard FINAL lancé")
+    print("Wave Rat Dashboard lancé !")
     print("Username: WaveRatAdmin2025")
     print("Password: R4tW@v3!2k25#xAI")
-    print("Captcha différent à chaque connexion + Remember me + Logout en bas à gauche")
+    print("Captcha différent à chaque fois + Remember Me propre + Logout en bas à gauche")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
