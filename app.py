@@ -13,7 +13,7 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456789"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # ===================== CONFIG =====================
-ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # ← Change avec tes IPs
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224", "80.215.131.115"}  # ← Change avec tes IPs
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 BLOCKED_IPS_FILE = "blocked_ips.json"  # Nouveau : stockage des skids
@@ -616,3 +616,4 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
