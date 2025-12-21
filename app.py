@@ -121,9 +121,13 @@ HTML = """<!DOCTYPE html>
     .btn.undo{background:#475569;}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;align-items:center;justify-content:center;}
     .modal.active{display:flex;}
-    .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:600px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
+    .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:700px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
     .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem;}
     input,textarea,select{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
+    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
+    .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
+    .payload-item:hover{background:#334155;}
+    .payload-item.selected{background:var(--primary);color:black;}
     .modal-buttons{display:flex;gap:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all .3s;}
     .confirm{background:var(--primary);color:white;}
@@ -132,7 +136,6 @@ HTML = """<!DOCTYPE html>
     .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;}
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
-    .payload-item{background:var(--card);padding:1rem;border-radius:12px;margin-bottom:1rem;border-left:4px solid var(--primary);display:flex;justify-content:space-between;align-items:center;}
 </style>
 </head>
 <body>
@@ -165,7 +168,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Tous les modals -->
+<!-- Modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -173,10 +176,12 @@ HTML = """<!DOCTYPE html>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
 
-<!-- Nouveau modal : exécuter payload avec édition temporaire -->
+<!-- Modal Import Payload avec recherche + édition -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
-    <h2>Execute Payload (edit before send)</h2>
-    <textarea id="tempPayloadCode" style="height:300px;"></textarea>
+    <h2>Import & Edit Payload</h2>
+    <div class="search-bar"><input type="text" id="payloadSearch" placeholder="Search payload by name..." onkeyup="filterPayloads()"></div>
+    <div class="payload-list" id="payloadList"></div>
+    <textarea id="tempPayloadCode" placeholder="Select a payload to edit..." style="height:250px;"></textarea>
     <div class="modal-buttons">
         <button class="modal-btn cancel">Cancel</button>
         <button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button>
@@ -189,7 +194,7 @@ HTML = """<!DOCTYPE html>
 const socket = io();
 let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
 let editingPayload = null;
-let tempPayloadCode = "";
+let selectedPayloadName = null;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -271,44 +276,49 @@ document.getElementById("savePayload").addEventListener("click", () => {
     });
 });
 
-// Ouvrir payload avec édition temporaire
+// Import Payload avec recherche + édition
 window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
+        const list = document.getElementById("payloadList");
+        list.innerHTML = "";
         if (Object.keys(data).length === 0) {
-            toast("No payload available");
-            return;
-        }
-        const select = document.createElement("select");
-        select.innerHTML = "<option value=''>-- Select a payload --</option>";
-        for (const name of Object.keys(data)) {
-            const opt = document.createElement("option");
-            opt.value = name; opt.textContent = name; select.appendChild(opt);
-        }
-        select.onchange = () => {
-            if (select.value) {
-                fetch("/payload?action=get&name=" + encodeURIComponent(select.value)).then(r => r.json()).then(d => {
-                    document.getElementById("tempPayloadCode").value = d.code;
-                    document.getElementById("executePayloadModal").classList.add("active");
-                });
+            list.innerHTML = "<p style='color:#94a3b8;text-align:center'>No payload available</p>";
+        } else {
+            for (const name of Object.keys(data)) {
+                const item = document.createElement("div");
+                item.className = "payload-item";
+                item.textContent = name;
+                item.onclick = () => {
+                    document.querySelectorAll('#payloadList .payload-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    selectedPayloadName = name;
+                    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
+                        document.getElementById("tempPayloadCode").value = d.code;
+                    });
+                };
+                list.appendChild(item);
             }
-        };
-        toast("Select a payload → it will open for editing");
-        // On ouvre directement le modal avec le sélecteur
-        const modal = document.getElementById("executePayloadModal");
-        modal.querySelector(".modal-content").innerHTML = `<h2>Select & Edit Payload</h2>${select.outerHTML}<textarea id="tempPayloadCode" style="height:300px;margin-top:1rem;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button></div>`;
-        modal.classList.add("active");
+        }
+        document.getElementById("tempPayloadCode").value = "";
+        document.getElementById("payloadSearch").value = "";
+        document.getElementById("executePayloadModal").classList.add("active");
     });
 };
 
-document.addEventListener("click", e => {
-    if (e.target && e.target.id === "executeTempPayload") {
-        const code = document.getElementById("tempPayloadCode").value.trim();
-        if (code && currentLuaId) {
-            sendTroll(currentLuaId, "luaexec", code);
-            document.getElementById("executePayloadModal").classList.remove("active");
-        }
-    }
+function filterPayloads() {
+    const query = document.getElementById("payloadSearch").value.toLowerCase();
+    document.querySelectorAll('#payloadList .payload-item').forEach(item => {
+        item.style.display = item.textContent.toLowerCase().includes(query) ? "block" : "none";
+    });
+}
+
+document.getElementById("executeTempPayload").addEventListener("click", () => {
+    const code = document.getElementById("tempPayloadCode").value.trim();
+    if (!code) return toast("No code to execute");
+    if (!currentLuaId) return toast("No player selected");
+    sendTroll(currentLuaId, "luaexec", code);
+    document.getElementById("executePayloadModal").classList.remove("active");
 });
 
 // Fonctions classiques
@@ -327,7 +337,6 @@ function sendTroll(id,cmd,param=null){
     toast(cmd.toUpperCase()+" sent");
 }
 
-// Confirmations classiques
 document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
 document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
 document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);document.getElementById("textScreenModal").classList.remove("active");});
@@ -350,7 +359,7 @@ function render(data){
         card.innerHTML=`
             <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId}</div>
+            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId || "N/A"}</div>
 
             <div class="category">TROLLS</div>
             <div class="btn-grid">
@@ -398,7 +407,7 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# === Toutes les routes (inchangées) ===
+# === Routes (inchangées) ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
