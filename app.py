@@ -1,17 +1,16 @@
-from flask import Flask, request, render_template_string, session, redirect, url_for
+from flask import Flask, request, render_template_string, session, redirect, url_for, make_response
 from flask_socketio import SocketIO
 import time
 import eventlet
 from datetime import datetime, timedelta
 import json
 import os
-import random
 import requests
 
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_FINAL_PERFECT_2025_XAI"
+app.config["SECRET_KEY"] = "WAVERAT_FINAL_ULTRA_SECURE_2025_XAI"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
@@ -19,22 +18,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 ADMIN_USERNAME = "WaveRatAdmin2025"
 ADMIN_PASSWORD = "R4tW@v3!2k25#xAI"
 
-# ====================== CAPTCHA ROBLOX-STYLE ======================
-CAPTCHA_CHALLENGES = [
-    {"image": "https://i.imgur.com/0j2kX9P.png", "question": "Turn the arrow upward", "answer": 0},
-    {"image": "https://i.imgur.com/5e8f9cX.png", "question": "Point the car to the right", "answer": 90},
-    {"image": "https://i.imgur.com/8k9d2mQ.png", "question": "Turn the key to the right", "answer": 90},
-    {"image": "https://i.imgur.com/3f7g1hJ.png", "question": "Make the fish swim to the left", "answer": 180},
-    {"image": "https://i.imgur.com/9p2k4mN.png", "question": "Make the bird fly upward", "answer": 0},
-]
-
-def generate_captcha():
-    challenge = random.choice(CAPTCHA_CHALLENGES)
-    session["captcha_answer"] = challenge["answer"]
-    session["captcha_image"] = challenge["image"]
-    session["captcha_question"] = challenge["question"]
-
-# ====================== ANTI PROXY / VPN ======================
+# ====================== ANTI PROXY / VPN / TOR ======================
 def is_proxy_or_vpn(ip):
     if ip in ["127.0.0.1", "::1"]: return False
     try:
@@ -93,12 +77,13 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN ======================
+# ====================== PAGE LOGIN + RECAPTCHA V2 + REMEMBER ME ======================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
 <title>Wave Rat - Login</title>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
     :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;--text-muted:#94a3b8;}
@@ -111,13 +96,7 @@ LOGIN_HTML = """<!DOCTYPE html>
     input[type="text"], input[type="password"]{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
     .btn{width:100%;padding:14px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;transition:all .3s;margin-top:1rem;}
     .btn:hover{background:#0891b2;transform:translateY(-3px);}
-    .error{color:#ef4444;text-align:center;margin-top:1rem;}
-    .captcha{margin:20px 0;text-align:center;}
-    .captcha p{font-size:1rem;margin-bottom:12px;color:var(--text);}
-    .captcha img{width:140px;height:140px;object-fit:contain;background:#1e293b;padding:15px;border-radius:16px;transition:transform .3s;}
-    .rotate-btns{display:flex;gap:12px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
-    .rotate-btn{background:#334155;padding:10px 18px;border-radius:10px;cursor:pointer;font-size:0.9rem;}
-    .rotate-btn:hover{background:#475569;}
+    .g-recaptcha{margin:20px auto;}
     .remember{display:flex;align-items:center;gap:10px;margin:15px 0;color:var(--text-muted);font-size:0.95rem;}
     .remember input{width:18px;height:18px;cursor:pointer;}
     .remember label{cursor:pointer;}
@@ -132,83 +111,64 @@ LOGIN_HTML = """<!DOCTYPE html>
     <form method="POST" action="/login">
         <input type="text" name="username" placeholder="Username" value="WaveRatAdmin2025" required autofocus>
         <input type="password" name="password" placeholder="Password" required>
-        
-        <div class="captcha">
-            <p id="question">Turn the arrow upward</p>
-            <img id="captcha-img" src="https://i.imgur.com/0j2kX9P.png">
-            <div class="rotate-btns">
-                <div class="rotate-btn" onclick="rotate(-90)">-90°</div>
-                <div class="rotate-btn" onclick="rotate(90)">+90°</div>
-                <div class="rotate-btn" onclick="rotate(180)">180°</div>
-                <div class="rotate-btn" onclick="rotate(270)">270°</div>
-            </div>
-        </div>
+
+        <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
 
         <div class="remember">
             <input type="checkbox" name="remember" id="remember">
             <label for="remember">Remember Me</label>
         </div>
 
-        <input type="hidden" name="rotation" id="rotation" value="0">
         <button type="submit" class="btn">Login Securely</button>
-        <div class="error" id="error"></div>
     </form>
 </div>
-
-<script>
-let rotation = 0;
-function rotate(deg) {
-    rotation = (rotation + deg + 360) % 360;
-    document.getElementById("captcha-img").style.transform = `rotate(${rotation}deg)`;
-    document.getElementById("rotation").value = rotation;
-}
-</script>
 </body>
 </html>"""
 
-# ====================== LOGIN ======================
+# ====================== LOGIN + RECAPTCHA + REMEMBER ME + VRAI LOGOUT ======================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if session.get("logged_in"):
         return redirect("/")
 
     if request.method == "GET":
-        generate_captcha()
-        html = LOGIN_HTML
-        html = html.replace("Turn the arrow upward", session["captcha_question"])
-        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{session["captcha_image"]}"')
-        return render_template_string(html)
+        return render_template_string(LOGIN_HTML)
 
     username = request.form.get("username", "")
     password = request.form.get("password", "")
     remember = request.form.get("remember") == "on"
-    submitted = int(request.form.get("rotation", -1)) % 360
+    recaptcha_response = request.form.get("g-recaptcha-response")
 
-    if "captcha_answer" not in session or submitted != session["captcha_answer"]:
-        generate_captcha()
-        html = LOGIN_HTML
-        html = html.replace("Turn the arrow upward", session["captcha_question"])
-        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{session["captcha_image"]}"')
-        return render_template_string(html + '<script>alert("Wrong captcha! New challenge loaded."); document.getElementById("rotation").value = 0; document.getElementById("captcha-img").style.transform = "rotate(0deg)"; rotation = 0;</script>')
+    if not recaptcha_response:
+        return render_template_string(LOGIN_HTML + "<script>alert('reCAPTCHA requis !');location.reload();</script>")
 
     if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
         session["logged_in"] = True
         session.permanent = remember
-        session.pop("captcha_answer", None)
-        session.pop("captcha_image", None)
-        session.pop("captcha_question", None)
         return redirect("/")
     else:
-        generate_captcha()
-        html = LOGIN_HTML
-        html = html.replace("Turn the arrow upward", session["captcha_question"])
-        html = html.replace('src="https://i.imgur.com/0j2kX9P.png"', f'src="{session["captcha_image"]}"')
-        return render_template_string(html + '<script>alert("Wrong credentials!"); document.getElementById("rotation").value = 0; document.getElementById("captcha-img").style.transform = "rotate(0deg)"; rotation = 0;</script>')
+        return render_template_string(LOGIN_HTML + "<script>alert('Mauvais identifiants !');location.reload();</script>")
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/login")
+    resp = make_response(redirect("/login"))
+    resp.set_cookie('session', '', expires=0)
+    return resp
+
+# ====================== PROTECTION + ANTI-VPN ======================
+@app.before_request
+def security_check():
+    protected = ["/", "/kick", "/troll", "/payload", "/get_history"]
+    if request.path in protected or request.path.startswith("/api"):
+        if not session.get("logged_in"):
+            return redirect("/login")
+
+    if request.path == "/login":
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        if ip and "," in ip: ip = ip.split(",")[0].strip()
+        if is_proxy_or_vpn(ip):
+            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy détecté → Accès refusé</h1>", 403
 
 # ====================== DASHBOARD COMPLET ======================
 HTML = """<!DOCTYPE html>
@@ -303,6 +263,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
+<!-- TOUS LES MODALS -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
@@ -321,6 +282,7 @@ HTML = """<!DOCTYPE html>
 </div></div>
 <div class="toast-container" id="toasts"></div>
 
+<!-- LOGOUT EN BAS À GAUCHE -->
 <div class="logout-fixed">
     <button class="logout-btn" onclick="location.href='/logout'">Logout</button>
 </div>
@@ -661,9 +623,9 @@ def broadcast_loop():
         socketio.sleep(2)
 
 if __name__ == "__main__":
-    print("Wave Rat Dashboard lancé !")
+    print("Wave Rat Dashboard FINAL lancé")
     print("Username: WaveRatAdmin2025")
     print("Password: R4tW@v3!2k25#xAI")
-    print("Captcha différent à chaque fois + Remember Me propre + Logout en bas à gauche")
+    print("reCAPTCHA v2 + Remember Me + Logout en bas à gauche + VRAI logout")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
