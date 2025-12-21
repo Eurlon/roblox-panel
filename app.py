@@ -124,7 +124,7 @@ HTML = """<!DOCTYPE html>
     .modal-content{background:var(--card);border:2px solid var(--primary);border-radius:16px;width:90%;max-width:700px;padding:2rem;box-shadow:0 30px 80px rgba(6,182,212,.5);}
     .modal-content h2{color:var(--primary);margin-bottom:1rem;text-align:center;font-size:1.6rem;}
     input,textarea,select{width:100%;padding:14px;background:#0f172a;border:1px solid var(--border);border-radius:12px;color:white;margin-bottom:1rem;font-family:'JetBrains Mono',monospace;}
-    .font-preview{font-family:var(--preview-font,'Inter');font-size:60px;color:var(--preview-color,#06b6d4);margin:10px 0;padding:10px;background:#0f172a;border-radius:8px;text-align:center;}
+    .font-preview{font-family:var(--preview-font,'Inter');font-size:80px;color:var(--preview-color,#06b6d4);margin:20px 0;padding:10px;background:#0f172a;border-radius:8px;text-align:center;}
     .modal-buttons{display:flex;gap:1rem;}
     .modal-btn{flex:1;padding:14px;border:none;border-radius:12px;font-weight:600;cursor:pointer;transition:all .3s;}
     .confirm{background:var(--primary);color:white;}
@@ -169,36 +169,31 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Modals -->
-<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
-<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
-
-<!-- Text Screen avec police, couleur, taille -->
+<!-- Text Screen (police, couleur, taille, preview) -->
 <div class="modal" id="textScreenModal"><div class="modal-content">
     <h2>Display Text Screen</h2>
     <input type="text" id="screenText" placeholder="Enter text" value="HACKED BY OXYDAL">
     <label style="color:#94a3b8;font-size:0.9rem;">Font</label>
     <select id="textFont">
         <option value="Arial">Arial</option>
-        <option value="Orbitron">Orbitron (Futuristic)</option>
-        <option value="Press Start 2P">Press Start 2P (8-bit)</option>
-        <option value="Creepster">Creepster (Horror)</option>
-        <option value="Bangers">Bangers (Comic)</option>
-        <option value="Nosifer">Nosifer (Blood)</option>
-        <option value="Monoton">Monoton (Neon)</option>
+        <option value="Orbitron">Orbitron</option>
+        <option value="Press Start 2P">Press Start 2P</option>
+        <option value="Creepster">Creepster</option>
+        <option value="Bangers">Bangers</option>
+        <option value="Nosifer" selected>Nosifer</option>
+        <option value="Monoton">Monoton</option>
         <option value="Audiowide">Audiowide</option>
-        <option value="VT323">VT323 (Terminal)</option>
+        <option value="VT323">VT323</option>
         <option value="Bebas Neue">Bebas Neue</option>
         <option value="Righteous">Righteous</option>
-        <option value="Russo One">Russo One</option>
         <option value="Pacifico">Pacifico</option>
         <option value="Lobster">Lobster</option>
         <option value="Dancing Script">Dancing Script</option>
     </select>
     <label style="color:#94a3b8;font-size:0.9rem;">Color</label>
-    <input type="color" id="textColor" value="#06b6d4">
+    <input type="color" id="textColor" value="#ff0000">
     <label style="color:#94a3b8;font-size:0.9rem;">Size (10-200)</label>
-    <input type="range" id="textSize" min="10" max="200" value="80">
+    <input type="range" id="textSize" min="10" max="200" value="97">
     <div class="font-preview" id="fontPreview">Preview Text</div>
     <div class="modal-buttons">
         <button class="modal-btn cancel">Cancel</button>
@@ -206,6 +201,9 @@ HTML = """<!DOCTYPE html>
     </div>
 </div></div>
 
+<!-- Autres modals -->
+<div class="modal" id="kickModal"><div class="modal-content"><h2>Kick Player</h2><input type="text" id="kickReason" placeholder="Reason (optional)" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmKick">Confirm Kick</button></div></div></div>
+<div class="modal" id="playSoundModal"><div class="modal-content"><h2>Play Sound</h2><input type="text" id="soundAssetId" placeholder="Enter Asset ID" autofocus><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmSound">Play</button></div></div></div>
 <div class="modal" id="luaExecModal"><div class="modal-content"><h2>Execute Lua Script</h2><textarea id="luaScript" placeholder="Enter Lua code" style="height:180px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmLua">Execute</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Import Lua File</h2><input type="file" id="luaFileInput" accept=".lua,.txt" style="padding:1rem;background:#0f172a;border:2px dashed var(--primary);border-radius:12px;cursor:pointer;"><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="confirmImport">Execute File</button></div></div></div>
 <div class="modal" id="payloadModal"><div class="modal-content"><h2 id="payloadModalTitle">Create Payload</h2><input type="text" id="payloadName" placeholder="Payload name"><textarea id="payloadCode" placeholder="Lua code..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Cancel</button><button class="modal-btn confirm" id="savePayload">Save</button></div></div></div>
@@ -256,7 +254,7 @@ function filterPlayers() {
     });
 }
 
-// Text Screen Preview
+// TextScreen Preview
 function updatePreview() {
     const text = document.getElementById("screenText").value || "Preview Text";
     const font = document.getElementById("textFont").value;
@@ -272,6 +270,30 @@ document.getElementById("screenText").addEventListener("input", updatePreview);
 document.getElementById("textFont").addEventListener("change", updatePreview);
 document.getElementById("textColor").addEventListener("input", updatePreview);
 document.getElementById("textSize").addEventListener("input", updatePreview);
+
+// TextScreen ENVOI PROPRE (JSON stringifié)
+document.getElementById("confirmText").addEventListener("click", () => {
+    const text = document.getElementById("screenText").value.trim();
+    if (!text) return toast("Enter text");
+    const payload = JSON.stringify({
+        text: text,
+        font: document.getElementById("textFont").value,
+        color: document.getElementById("textColor").value,
+        size: parseInt(document.getElementById("textSize").value)
+    });
+    sendTroll(currentTextId, "textscreen", payload);
+    document.getElementById("textScreenModal").classList.remove("active");
+});
+
+function openTextScreenModal(id){
+    currentTextId = id;
+    document.getElementById("screenText").value = "HACKED BY OXYDAL";
+    document.getElementById("textFont").value = "Nosifer";
+    document.getElementById("textColor").value = "#ff0000";
+    document.getElementById("textSize").value = 97;
+    updatePreview();
+    document.getElementById("textScreenModal").classList.add("active");
+}
 
 // Workshop
 function loadPayloads() {
@@ -343,7 +365,6 @@ window.openPayloadSelector = function(id) {
                 item.onclick = () => {
                     document.querySelectorAll('#payloadList .payload-item').forEach(i => i.classList.remove('selected'));
                     item.classList.add('selected');
-                    selectedPayloadName = name;
                     fetch("/payload?action=get&name=" + encodeURIComponent(name)).then(r => r.json()).then(d => {
                         document.getElementById("tempPayloadCode").value = d.code;
                     });
@@ -367,7 +388,6 @@ function filterPayloads() {
 document.getElementById("executeTempPayload").addEventListener("click", () => {
     const code = document.getElementById("tempPayloadCode").value.trim();
     if (!code) return toast("No code to execute");
-    if (!currentLuaId) return toast("No player selected");
     sendTroll(currentLuaId, "luaexec", code);
     document.getElementById("executePayloadModal").classList.remove("active");
 });
@@ -375,15 +395,6 @@ document.getElementById("executeTempPayload").addEventListener("click", () => {
 // Fonctions classiques
 function openKickModal(id){currentKickId=id;document.getElementById("kickModal").classList.add("active");document.getElementById("kickReason").focus();}
 function openPlaySoundModal(id){currentSoundId=id;document.getElementById("playSoundModal").classList.add("active");}
-function openTextScreenModal(id){
-    currentTextId=id;
-    document.getElementById("screenText").value="HACKED BY OXYDAL";
-    document.getElementById("textFont").value="Creepster";
-    document.getElementById("textColor").value="#ff0000";
-    document.getElementById("textSize").value=100;
-    updatePreview();
-    document.getElementById("textScreenModal").classList.add("active");
-}
 function openLuaExecModal(id){currentLuaId=id;document.getElementById("luaExecModal").classList.add("active");}
 function openImportFileModal(id){currentImportId=id;document.getElementById("importFileModal").classList.add("active");}
 
@@ -398,7 +409,6 @@ function sendTroll(id,cmd,param=null){
 
 document.getElementById("confirmKick").addEventListener("click",()=>{const r=document.getElementById("kickReason").value.trim()||"Kicked by admin";fetch("/kick",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userid:currentKickId,reason:r})});toast("KICK sent");document.getElementById("kickModal").classList.remove("active");});
 document.getElementById("confirmSound").addEventListener("click",()=>{const a=document.getElementById("soundAssetId").value.trim();if(a)sendTroll(currentSoundId,"playsound",a);document.getElementById("playSoundModal").classList.remove("active");});
-document.getElementById("confirmText").addEventListener("click",()=>{const t=document.getElementById("screenText").value.trim();if(!t)return toast("Enter text");const payload={text:t,font:document.getElementById("textFont").value,color:document.getElementById("textColor").value,size:parseInt(document.getElementById("textSize").value)};sendTroll(currentTextId,"textscreen",JSON.stringify(payload));document.getElementById("textScreenModal").classList.remove("active");});
 document.getElementById("confirmLua").addEventListener("click",()=>{const s=document.getElementById("luaScript").value.trim();if(s)sendTroll(currentLuaId,"luaexec",s);document.getElementById("luaExecModal").classList.remove("active");});
 document.getElementById("confirmImport").addEventListener("click",()=>{
     const f=document.getElementById("luaFileInput").files[0];
@@ -536,15 +546,14 @@ def troll():
             cmd_data["assetId"] = data["assetId"]
             details += f" (Asset: {data['assetId']})"
         elif "text" in data:
-            cmd_data["text"] = data["text"]
-            details += f" (Text: {data['text']})"
+            cmd_data["text"] = data["text"]  # ← Envoi propre (string JSON)
+            details += " (Styled Text)"
         elif "script" in data:
             cmd_data["script"] = data["script"]
             details += f" (Script: {len(data['script'])} chars)"
         pending_commands[uid] = cmd_data
         name = connected_players.get(uid, {}).get("username", "Unknown")
         add_history("action", name, details)
-        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
     return jsonify({"sent": True})
 
 @app.route("/payload", methods=["GET", "POST"])
