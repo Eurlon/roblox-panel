@@ -18,7 +18,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # ==================== CONFIG ====================
 LOGIN = "entrepreneur1337"           # Change ici
-PASSWORD = "A9f!Q3r#Zx7L@M2p$T8WkE%yC4H"        # Change ici
+PASSWORD = "A9f!Q3r#Zx7L"        # Change ici
 SESSION_DURATION = 24 * 3600
 
 HISTORY_FILE = "history_log.json"
@@ -626,5 +626,6 @@ def broadcast_loop():
 if __name__ == "__main__":
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000)
+
 
 
